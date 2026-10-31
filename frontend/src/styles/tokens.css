@@ -1,0 +1,50 @@
+/* src/styles/tokens.css */
+:root {
+  /* Color palette (derived from tailwind.config.js) */
+  --color-primary: #7000A4;
+  --color-primary-dark: #2A0A5C;
+  --color-accent: #FF2FB0;
+  --color-bg: #F6F7FD;
+  --color-surface: #FFFFFF;
+  --color-text-main: #1A1A1A;
+  --color-muted: #6B7280;
+  --color-border-light: #E5E7EB;
+  --color-success-bg: #E6F6EA;
+  --color-success-text: #2E7D32;
+  --color-pending-bg: #FFF3E0;
+  --color-pending-text: #E65100;
+  --color-failed-bg: #FDECEC;
+  --color-failed-text: #C62828;
+  --color-expired-bg: #F1F1F1;
+  --color-expired-text: #616161;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-sans: 'Inter', 'Roboto', system-ui, sans-serif;
+  --fs-xs: 0.75rem;   /* 12px */
+  --fs-sm: 0.875rem;  /* 14px */
+  --fs-base: 1rem;    /* 16px */
+  --fs-lg: 1.125rem;  /* 18px */
+  --fs-xl: 1.25rem;   /* 20px */
+  --fs-2xl: 1.5rem;   /* 24px */
+  --fs-3xl: 1.875rem; /* 30px */
+  --fs-4xl: 2.25rem;  /* 36px */
+
+  /* Transition */
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.3s ease;
+}

@@ -31,3 +31,26 @@ frontend/.vite/
 
 # TypeScript
 *.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build files
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/

@@ -1,0 +1,51 @@
+/* KycPage.module.css */
+
+.kycCard {
+  max-width: 520px;
+}
+
+.statusBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+}
+
+.statusLabel {
+  font-weight: 700;
+  font-size: var(--text-base);
+}
+
+.refId {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-family: monospace;
+  margin-top: 2px;
+}
+
+.privacyNotice {
+  background: hsl(200 90% 55% / 0.06);
+  border: 1px solid hsl(200 90% 55% / 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.privacyNotice strong {
+  display: block;
+  color: var(--color-info);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.privacyNotice ul {
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
