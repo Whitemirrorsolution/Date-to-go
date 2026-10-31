@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { Server as SocketIOServer } from 'socket.io';
 import { connectDB, disconnectDB } from './config/database.js';
 import { env } from './config/env.js';
+import { ALLOWED_ORIGINS } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { startSubscriptionExpiryCron } from './jobs/subscriptionExpiry.js';
 import { startSafetyMonitorCron } from './jobs/safetyMonitor.js';
@@ -42,7 +43,8 @@ async function bootstrap(): Promise<void> {
   // Initialize Socket.io
   const io = new SocketIOServer(server, {
     cors: {
-      origin: '*', // Allow all origins for dev
+      origin: ALLOWED_ORIGINS,
+      credentials: true,
       methods: ['GET', 'POST']
     }
   });

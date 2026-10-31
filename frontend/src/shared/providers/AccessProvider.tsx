@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, getAccessToken } from '../../services/api';
+import { API_URL } from '../../config/index.js';
 import { UserAccessData, resolveHomeRoute } from '@date-to-go/access-policy';
 import { useAuth } from '../../context/AuthContext';
 
@@ -67,7 +68,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const token = getAccessToken();
         if (!token) return;
 
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/events`, {
+        const response = await fetch(`${API_URL}/v1/events`, {
           headers: {
             'Authorization': `Bearer ${token}`
           },

@@ -7,6 +7,7 @@ import compression from 'compression';
 import { doubleCsrf } from 'csrf-csrf';
 import type { Application, Request, Response } from 'express';
 import { env, corsOrigins, isProd } from '../config/env.js';
+import { ALLOWED_ORIGINS } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -43,7 +44,7 @@ export function applySecurityMiddleware(app: Application): void {
       origin: (origin, cb) => {
         // Allow server-to-server (no origin) only in non-prod
         if (!origin && !isProd) return cb(null, true);
-        if (origin && corsOrigins.includes(origin)) return cb(null, true);
+        if (origin && (ALLOWED_ORIGINS.includes(origin) || corsOrigins.includes(origin))) return cb(null, true);
         logger.warn({ origin }, 'CORS: rejected request from unlisted origin');
         cb(new Error(`CORS: origin ${origin ?? 'unknown'} not allowed`));
       },

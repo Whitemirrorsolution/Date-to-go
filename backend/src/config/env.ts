@@ -5,6 +5,7 @@ const envSchema = z.object({
   // Server
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
+  BASE_DOMAIN: z.string().optional(),
   API_VERSION: z.string().default('v1'),
 
   // MongoDB

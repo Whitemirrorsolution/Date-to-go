@@ -17,6 +17,7 @@
   "dependencies": {
     "@date-to-go/access-policy": "*",
     "@reduxjs/toolkit": "^2.13.0",
+    "axios": "^1.7.0",
     "framer-motion": "^14.6.0",
     "lucide-react": "^1.49.0",
     "react": "^18.3.1",

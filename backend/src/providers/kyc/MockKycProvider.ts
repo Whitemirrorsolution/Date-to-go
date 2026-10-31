@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger.js';
 import type { KycProvider, KycSessionResult } from './KycProvider.js';
+import { CLIENT_URL } from '../../config/index.js';
 
 /**
  * Mock KYC provider for development and testing.
@@ -14,7 +15,7 @@ export class MockKycProvider implements KycProvider {
     return {
       providerRefId,
       // In dev, the "redirect" just goes to the KYC status page
-      redirectUrl: `http://localhost:5173/kyc/mock-complete?ref=${providerRefId}`,
+      redirectUrl: `${CLIENT_URL}/kyc/mock-complete?ref=${providerRefId}`,
     };
   }
 

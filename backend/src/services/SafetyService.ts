@@ -9,6 +9,7 @@ import { SafetyCheck } from '../models/SafetyCheck.js';
 import { smsProvider } from '../providers/index.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
+import { CLIENT_URL } from '../config/index.js';
 import type { IBooking } from '../models/Booking.js';
 
 export interface SosResult {
@@ -93,7 +94,7 @@ export class SafetyService {
     if (booking) {
       try {
         const link = await this.generateShareLink(userId, booking._id.toString());
-        shareUrl = `https://datetogo.app/s/${link.token}`;
+        shareUrl = `${CLIENT_URL}/s/${link.token}`;
       } catch (_e) { /* non-fatal */ }
     }
 
@@ -159,7 +160,7 @@ export class SafetyService {
       expiresAt,
     });
 
-    return { token: link.token, url: `https://datetogo.app/s/${link.token}` };
+    return { token: link.token, url: `${CLIENT_URL}/s/${link.token}` };
   }
 
   /**

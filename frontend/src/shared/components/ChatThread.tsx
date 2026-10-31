@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { SOCKET_URL } from '../../config/index.js';
 import {
   Send, ShieldCheck, AlertTriangle, Lock, Clock,
   CheckCheck, Sparkles, AlertCircle
@@ -103,7 +104,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     loadChatData();
 
     // Setup Socket.io connection for real-time delivery
-    const socket = io('/', { path: '/socket.io' });
+    const socket = io(SOCKET_URL, { path: '/socket.io' });
     socketRef.current = socket;
 
     socket.emit('join_booking_chat', bookingId);

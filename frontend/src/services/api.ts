@@ -1,16 +1,12 @@
 /**
  * API client for Date to Go frontend.
  *
- * Security design:
- * - Access token stored IN MEMORY ONLY (never localStorage/sessionStorage)
- *   → survives page navigation but is lost on hard-refresh (intentional)
- *   → silent refresh on mount restores session from httpOnly cookie
- * - Single-flight refresh: concurrent 401s queue behind one refresh call
- * - Refresh token lives only in httpOnly Secure SameSite=Strict cookie
- *   (managed by the backend, invisible to JavaScript)
+ * Uses the shared axios instance (src/api/axios.js) configured with config.API_URL.
  */
 
-const API_BASE = '/api/v1';
+import { axiosInstance, getAccessToken, setAccessToken, silentRefresh } from '../api/axios.js';
+
+export { getAccessToken, setAccessToken, silentRefresh };
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -33,109 +29,45 @@ export function formatApiError(err: any): string {
   return err?.message || 'An unexpected error occurred. Please try again.';
 }
 
-// ── In-memory token store (NOT localStorage) ──────────────────────────────
-
-let _accessToken: string | null = null;
-
-export function getAccessToken(): string | null {
-  return _accessToken;
-}
-export function setAccessToken(token: string | null): void {
-  _accessToken = token;
-}
-
-// ── Single-flight refresh mutex ────────────────────────────────────────────
-
-let _refreshPromise: Promise<string | null> | null = null;
-
-async function doRefresh(): Promise<string | null> {
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include', // sends httpOnly refresh cookie
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (!res.ok) {
-      _accessToken = null;
-      return null;
-    }
-
-    const json = (await res.json()) as ApiResponse<{ accessToken: string }>;
-    const token = json.data?.accessToken ?? null;
-    _accessToken = token;
-    return token;
-  } catch {
-    _accessToken = null;
-    return null;
-  }
-}
-
-/**
- * Attempt a silent token refresh.
- * Multiple concurrent callers share the same Promise (single-flight).
- */
-export async function silentRefresh(): Promise<string | null> {
-  if (_refreshPromise) return _refreshPromise;
-  _refreshPromise = doRefresh().finally(() => {
-    _refreshPromise = null;
-  });
-  return _refreshPromise;
-}
-
-// ── Core request function ──────────────────────────────────────────────────
+// ── Core request function using shared axios instance ──────────────────────
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
-  _retry = true,
 ): Promise<ApiResponse<T>> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (options.body instanceof FormData) {
-    delete headers['Content-Type'];
+  let url = endpoint;
+  if (!url.startsWith('/v1/') && url !== '/v1') {
+    url = `/v1${url.startsWith('/') ? '' : '/'}${url}`;
   }
 
-  if (_accessToken) {
-    headers['Authorization'] = `Bearer ${_accessToken}`;
-  }
-
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
-
-  // 402: subscription plan required — emit global event for the plan-gate listener
-  if (res.status === 402) {
-    window.dispatchEvent(
-      new CustomEvent('dtg:plan_required', {
-        detail: { message: 'An active subscription plan is required for this action.' },
-      }),
-    );
-  }
-
-  // 401: access token expired → attempt silent refresh once, then retry
-  if (res.status === 401 && _retry) {
-    const newToken = await silentRefresh();
-    if (newToken) {
-      // Retry the original request with the fresh token
-      return request<T>(endpoint, options, false);
+  try {
+    const isFormData = options.body instanceof FormData;
+    let dataPayload = options.body;
+    if (dataPayload && typeof dataPayload === 'string' && !isFormData) {
+      try {
+        dataPayload = JSON.parse(dataPayload);
+      } catch {
+        // Leave as string if not JSON
+      }
     }
-    // Refresh failed — emit logout event
-    window.dispatchEvent(new CustomEvent('dtg:session_expired'));
+
+    const res = await axiosInstance.request<ApiResponse<T>>({
+      url,
+      method: (options.method as any) || 'GET',
+      data: dataPayload,
+      headers: (options.headers as Record<string, string>) || {},
+    });
+
+    return res.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw {
+      success: false,
+      message: err.message || 'An unexpected error occurred. Please try again.',
+    };
   }
-
-  const data = (await res.json()) as ApiResponse<T>;
-
-  if (!res.ok) {
-    throw data; // Caller receives the API error object
-  }
-
-  return data;
 }
 
 // ── Convenience methods ────────────────────────────────────────────────────

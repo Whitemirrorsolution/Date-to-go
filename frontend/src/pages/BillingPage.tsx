@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader.js';
 import { api, getAccessToken } from '../services/api.js';
+import { API_URL } from '../config/index.js';
 
 interface SubscriptionData {
   _id: string;
@@ -100,7 +101,7 @@ export const BillingPage: React.FC = () => {
     try {
       setDownloadingId(paymentId);
       const token = getAccessToken();
-      const res = await fetch(`/api/v1/payments/invoices/${paymentId}/pdf`, {
+      const res = await fetch(`${API_URL}/v1/payments/invoices/${paymentId}/pdf`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
