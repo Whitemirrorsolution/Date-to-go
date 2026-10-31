@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Vite
+frontend/dist/
+frontend/.vite/
+
+# TypeScript
+*.tsbuildinfo

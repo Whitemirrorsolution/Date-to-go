@@ -1,0 +1,9 @@
+{
+  "name": "@date-to-go/access-policy",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
