@@ -27,11 +27,8 @@ export const PartnerDashboardPage: React.FC = () => {
   const { switchMode, logout, user } = useAuth();
   const { access } = useAccess();
 
-  useEffect(() => {
-    if (access && !access.entitlements?.partner?.active && !user?.roles?.includes('ADMIN')) {
-      navigate('/pricing', { replace: true });
-    }
-  }, [access, user, navigate]);
+  // Non-blocking subscription check: partners can explore dashboard, with clear banner if plan needed
+  const isPartnerSubActive = access?.entitlements?.partner?.active || user?.roles?.includes('ADMIN');
   
   const searchParams = new URLSearchParams(location.search);
   const activeTab = (searchParams.get('tab') as PartnerTabType) || 'home';
@@ -239,6 +236,25 @@ export const PartnerDashboardPage: React.FC = () => {
 
         {/* Scrollable Main Content */}
         <main className="flex-1 overflow-y-auto px-4 md:px-8 pt-20 md:pt-28 pb-28 md:pb-12 scrollbar-hide w-full max-w-6xl mx-auto">
+          {!isPartnerSubActive && (
+            <div className="bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10 border border-primary/20 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-textMain">Activate Your Companion Subscription</h4>
+                  <p className="text-xs text-muted">Subscribe to a partner plan to unlock top search ranking and accept date bookings.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/pricing?intent=become_partner')}
+                className="w-full sm:w-auto px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition-all shrink-0 hover:bg-primary/90"
+              >
+                View Plans & Activate
+              </button>
+            </div>
+          )}
           
           {/* HOME TAB */}
           {activeTab === 'home' && (
@@ -357,7 +373,7 @@ export const PartnerDashboardPage: React.FC = () => {
           )}
 
           {/* REQUESTS TAB */}
-          {activeTab === 'requests' && <PartnerRequestInbox />}
+          {activeTab === 'requests' && <PartnerRequestInbox onActionSuccess={fetchData} />}
            {/* ACCEPTED TAB */}
            {activeTab === 'accepted' && (
              <div className="animate-in fade-in slide-in-from-bottom-2">

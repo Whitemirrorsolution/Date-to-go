@@ -360,12 +360,19 @@ router.post(
       moderationService.validateProfileBio(profile.bio);
     }
 
-    profile.approvalStatus = 'PENDING_REVIEW';
+    const { User } = await import('../models/User.js');
+    const user = await User.findById(req.user!.id);
+    if (user?.kycStatus === 'VERIFIED' || profile.approvalStatus === 'APPROVED') {
+      profile.approvalStatus = 'APPROVED';
+      profile.isListed = true;
+    } else {
+      profile.approvalStatus = 'PENDING_REVIEW';
+    }
     await profile.save();
 
     res.status(200).json({
       success: true,
-      message: 'Profile submitted for admin review. You will be notified once approved.',
+      message: 'Profile updated successfully.',
       data: { approvalStatus: profile.approvalStatus },
     });
   }),
@@ -376,8 +383,14 @@ router.get(
   '/kyc',
   asyncHandler(async (req: Request, res: Response) => {
     let submission = await KycSubmission.findOne({ partnerId: req.user!.id });
+    const { User } = await import('../models/User.js');
+    const user = await User.findById(req.user!.id);
     if (!submission) {
-      submission = await KycSubmission.create({ partnerId: req.user!.id, status: 'NOT_SUBMITTED' });
+      const initialStatus = user?.kycStatus === 'VERIFIED' ? 'APPROVED' : 'NOT_SUBMITTED';
+      submission = await KycSubmission.create({ partnerId: req.user!.id, status: initialStatus });
+    } else if (user?.kycStatus === 'VERIFIED' && submission.status !== 'APPROVED') {
+      submission.status = 'APPROVED';
+      await submission.save();
     }
     res.json({ success: true, data: submission });
   })
@@ -452,12 +465,14 @@ router.get(
     }
 
     const bookings = await Booking.find(filter)
-      .populate('clientId', 'email gender')
+      .populate('clientId', 'fullName email gender')
       .populate('categoryId')
       .sort({ startAt: -1 });
 
     const transformed = bookings.map(b => {
       const bObj: any = b.toObject();
+      bObj.status = bObj.stage;
+      bObj.seekerName = (b.clientId as any)?.fullName || (b.clientId as any)?.email?.split('@')[0] || 'Seeker';
       bObj.totalPricePaise = bObj.totalPaise;
       bObj.platformFeePaise = bObj.commissionPaise;
       return bObj;
@@ -476,10 +491,12 @@ router.get(
   requireEntitlement('PARTNER'),
   asyncHandler(async (req: Request, res: Response) => {
     const booking = await Booking.findOne({ _id: req.params.id, partnerId: req.user!.id })
-      .populate('clientId', 'email gender')
+      .populate('clientId', 'fullName email gender')
       .populate('categoryId');
     if (!booking) throw new AppError('Booking not found', 404);
     const bObj: any = booking.toObject();
+    bObj.status = bObj.stage;
+    bObj.seekerName = (booking.clientId as any)?.fullName || (booking.clientId as any)?.email?.split('@')[0] || 'Seeker';
     bObj.totalPricePaise = bObj.totalPaise;
     bObj.platformFeePaise = bObj.commissionPaise;
     res.status(200).json({ success: true, data: bObj });
@@ -497,7 +514,7 @@ router.post(
     if (booking.stage !== 'REQUESTED') throw new AppError('Booking is not in REQUESTED state', 400);
 
     const listing = await Listing.findOneAndUpdate(
-      { _id: booking.listingId, status: 'OPEN' },
+      { _id: booking.listingId, status: { $in: ['OPEN', 'ACTIVE', 'HELD'] } },
       { $set: { status: 'HELD' } },
       { new: true },
     );
@@ -514,7 +531,7 @@ router.post(
     await Notification.create({
       userId: booking.clientId,
       title: 'Booking Accepted! 🤝',
-      message: `Your companion accepted your booking for ${new Date(booking.startAt).toLocaleString('en-IN')}. Get ready!`,
+      body: `Your companion accepted your booking for ${new Date(booking.startAt).toLocaleString('en-IN')}. Get ready!`,
       type: 'BOOKING_UPDATE',
     });
 
@@ -545,7 +562,7 @@ router.post(
     await Notification.create({
       userId: booking.clientId,
       title: 'Booking Declined',
-      message: `Your booking request was declined (${booking.cancelReason}). No payment was charged.`,
+      body: `Your booking request was declined (${booking.cancelReason}). No payment was charged.`,
       type: 'BOOKING_UPDATE',
     });
 
@@ -780,13 +797,18 @@ router.post(
     // Partner must have this category in their profile rates (bypassed for ADMIN testing)
     const profile = await PartnerProfile.findOne({ userId: req.user!.id });
     const isAdmin = req.user!.roles?.includes('ADMIN' as any);
-    const catRate = profile?.categories?.find(c => c.categoryId.toString() === dto.categoryId);
-
-    if (!catRate && !isAdmin) {
-      throw new AppError('You must add this category to your profile first', 400, 'BAD_REQUEST');
-    }
-
     const durationHours = (dto.durationMins || 60) / 60;
+    const catRate = profile?.categories?.find(c => c.categoryId?.toString() === dto.categoryId);
+
+    if (!catRate && !isAdmin && profile) {
+      // Auto-assign category to partner's profile with calculated hourly rate
+      const hourlyRatePaise = Math.round(dto.pricePaise / durationHours) || category.defaultRatePaise || 50000;
+      profile.categories.push({
+        categoryId: category._id as any,
+        hourlyRatePaise,
+      });
+      await profile.save();
+    }
     const minAllowed = (category.minRatePaise || 10000) * durationHours;
     const maxAllowed = (category.maxRatePaise || 1000000) * durationHours;
     if (dto.pricePaise < minAllowed || dto.pricePaise > maxAllowed) {

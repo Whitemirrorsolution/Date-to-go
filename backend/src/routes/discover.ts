@@ -186,6 +186,155 @@ export function checkMutualGenderConsent(
   return seekerAcceptsPartner && partnerAcceptsSeeker;
 }
 
+// ── GET /partners — Browse Companion Profiles (no listing required) ────────
+const PartnerBrowseSchema = z.object({
+  city: z.string().optional(),
+  categorySlug: z.string().optional(),
+  maxPrice: z.coerce.number().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+router.get(
+  '/partners',
+  asyncHandler(async (req: Request, res: Response) => {
+    const query = PartnerBrowseSchema.parse(req.query);
+    const seekerId = req.user!.id;
+    const seeker = await User.findById(seekerId);
+    if (!seeker) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+
+    // 1. Find blocked user IDs
+    const blocks = await Block.find({
+      $or: [{ userId: seekerId }, { blockedUserId: seekerId }],
+    });
+    const blockedUserIds = new Set<string>();
+    for (const b of blocks) {
+      blockedUserIds.add(b.userId.toString());
+      blockedUserIds.add(b.blockedUserId.toString());
+    }
+
+    // 2. Build partner user filter
+    const partnerUserFilter: Record<string, unknown> = {
+      roles: 'PARTNER',
+      status: 'ACTIVE',
+      kycStatus: 'VERIFIED',
+    };
+    if (query.city) {
+      partnerUserFilter['city'] = new RegExp(`^${query.city}$`, 'i');
+    }
+
+    const eligibleUsers = await User.find(partnerUserFilter).select('_id gender fullName city');
+    const eligibleMap = new Map(
+      eligibleUsers
+        .filter(u => !blockedUserIds.has(u._id.toString()))
+        .map(u => [u._id.toString(), u]),
+    );
+    const eligibleIds = Array.from(eligibleMap.keys());
+
+    // 3. Build profile filter
+    const profileFilter: Record<string, unknown> = {
+      userId: { $in: eligibleIds },
+      isListed: true,
+      approvalStatus: 'APPROVED',
+    };
+
+    // Category filter
+    let categoryId: string | undefined;
+    if (query.categorySlug && query.categorySlug !== 'all') {
+      const category = await Category.findOne({ slug: query.categorySlug, isActive: true });
+      if (category) {
+        categoryId = category._id.toString();
+        profileFilter['categories.categoryId'] = category._id;
+      }
+    }
+
+    // Max price filter
+    if (query.maxPrice !== undefined) {
+      if (categoryId) {
+        profileFilter['categories'] = {
+          $elemMatch: {
+            categoryId,
+            hourlyRatePaise: { $lte: query.maxPrice },
+          },
+        };
+        delete profileFilter['categories.categoryId'];
+      } else {
+        profileFilter['categories'] = {
+          $elemMatch: {
+            hourlyRatePaise: { $lte: query.maxPrice },
+          },
+        };
+      }
+    }
+
+    const profiles = await PartnerProfile.find(profileFilter)
+      .populate('categories.categoryId', 'name slug icon')
+      .sort({ ratingAvg: -1 });
+
+    // 4. Apply gender consent + build response
+    const results: any[] = [];
+    for (const profile of profiles) {
+      const partnerUser = eligibleMap.get(profile.userId.toString());
+      if (!partnerUser) continue;
+
+      // Mutual gender consent
+      const hasConsent = checkMutualGenderConsent(
+        seeker.gender,
+        seeker.preferredGender || [],
+        partnerUser.gender,
+        (profile.allowedSeekerGenders as UserGender[]) || [],
+      );
+      if (!hasConsent) continue;
+
+      const rates = profile.categories.map(c => c.hourlyRatePaise).filter(Boolean);
+      const minRate = rates.length > 0 ? Math.min(...rates) : 50000;
+
+      // Fetch open listing count for this partner
+      const listingCount = await Listing.countDocuments({
+        partnerId: profile.userId,
+        status: 'OPEN',
+        $or: [{ endAt: { $gt: new Date() } }, { startAt: { $gt: new Date() } }],
+      });
+
+      results.push({
+        _id: profile._id.toString(),
+        partnerId: profile.userId.toString(),
+        displayName: profile.displayName || partnerUser.fullName || 'Verified Companion',
+        bio: profile.bio || 'Professional verified companion on Date to Go.',
+        primaryPhoto: profile.primaryPhoto || '',
+        photos: profile.photos || [],
+        hourlyRatePaise: minRate,
+        city: profile.city || partnerUser.city || '',
+        area: profile.area || '',
+        languages: profile.languages || [],
+        interests: profile.interests || [],
+        categories: profile.categories || [],
+        ratingAvg: profile.ratingAvg || 5.0,
+        ratingCount: profile.ratingCount || 0,
+        isAvailableNow: profile.isAvailableNow ?? true,
+        kycVerified: true,
+        gender: partnerUser.gender,
+        openListings: listingCount,
+      });
+    }
+
+    // Paginate
+    const startIndex = (query.page - 1) * query.limit;
+    const paginated = results.slice(startIndex, startIndex + query.limit);
+
+    res.json({
+      success: true,
+      data: paginated,
+      meta: {
+        total: results.length,
+        page: query.page,
+        limit: query.limit,
+        totalPages: Math.ceil(results.length / query.limit),
+      },
+    });
+  }),
+);
+
 // ── GET / — Discovery Feed ─────────────────────────────────────────────────
 
 router.get(

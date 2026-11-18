@@ -120,11 +120,21 @@ export function requireRole(...roleGroups: (RoleName | readonly RoleName[])[]) {
 export function requireEntitlement(audience: 'SEEKER' | 'PARTNER') {
   return [
     attachAccessSnapshot,
-    (req: Request, _res: Response, next: NextFunction): void => {
+    async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
       const snap = req.accessSnapshot;
       if (!snap) return next(new AppError('Unauthorized', 401, 'UNAUTHORIZED'));
 
       if (snap.roles.includes('ADMIN' as any)) return next();
+
+      try {
+        const { AppSetting } = await import('../models/AppSetting.js');
+        const setting = await AppSetting.findOne({ key: 'requireSubscriptionForAccess' });
+        if (setting && setting.value === false) {
+          return next();
+        }
+      } catch {
+        // Continue with normal check if DB setting lookup fails
+      }
 
       const ent = audience === 'SEEKER' ? snap.entitlements.seeker : snap.entitlements.partner;
 

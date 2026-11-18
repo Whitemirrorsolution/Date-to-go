@@ -2,31 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../../services/api.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
-  Search, MapPin, Calendar, Star, ShieldCheck, 
-  SlidersHorizontal, X, ChevronLeft, Sparkles 
+  Search, MapPin, Star, ShieldCheck, 
+  SlidersHorizontal, X, ChevronLeft, Sparkles,
+  Calendar, MessageCircle
 } from 'lucide-react';
 import { CategoryIcon } from '../../../components/CategoryIcon.js';
 
-interface ListingItem {
+interface PartnerItem {
   _id: string;
-  title: string;
-  description: string;
-  startAt: string;
-  durationMins: number;
+  partnerId: string;
+  displayName: string;
+  bio: string;
+  primaryPhoto: string;
+  photos: string[];
+  hourlyRatePaise: number;
   city: string;
   area: string;
-  venueType: string;
-  venueName: string;
-  basePricePaise: number;
-  profile: {
-    displayName: string;
-    primaryPhoto: string;
-    ratingAverage: number;
-    totalReviews: number;
-  };
-  partnerUser: {
-    gender: string;
-  };
+  languages: string[];
+  interests: string[];
+  categories: Array<{
+    categoryId: any;
+    hourlyRatePaise: number;
+  }>;
+  ratingAvg: number;
+  ratingCount: number;
+  isAvailableNow: boolean;
+  kycVerified: boolean;
+  gender: string;
+  openListings: number;
 }
 
 interface CategoryItem {
@@ -43,7 +46,7 @@ export const DiscoverPage: React.FC = () => {
   const initialSlug = searchParams.get('categorySlug') || 'all';
 
   // State
-  const [listings, setListings] = useState<ListingItem[]>([]);
+  const [partners, setPartners] = useState<PartnerItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -60,7 +63,7 @@ export const DiscoverPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    searchListings();
+    searchPartners();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategorySlug]);
 
@@ -85,30 +88,29 @@ export const DiscoverPage: React.FC = () => {
     }
   };
 
-  const searchListings = async () => {
+  const searchPartners = async () => {
     setLoading(true);
-    setShowMobileFilters(false); // Close drawer if open on mobile
+    setShowMobileFilters(false);
     
     try {
       const params = new URLSearchParams();
       if (city) params.append('city', city);
       if (maxBudget) params.append('maxPrice', String(maxBudget * 100));
+      if (selectedCategorySlug && selectedCategorySlug !== 'all') {
+        params.append('categorySlug', selectedCategorySlug);
+      }
 
-      const endpoint = (!selectedCategorySlug || selectedCategorySlug === 'all')
-        ? `/discover/categories/all/listings`
-        : `/discover/categories/${selectedCategorySlug}/listings`;
-
-      const res = await api.get<any>(`${endpoint}?${params.toString()}`);
+      const res = await api.get<any>(`/discover/partners?${params.toString()}`);
       const rawData = res.data?.data || res.data || [];
       
       if (Array.isArray(rawData)) {
-        setListings(rawData);
+        setPartners(rawData);
       } else {
-        setListings([]);
+        setPartners([]);
       }
     } catch (err) {
       console.error('Discovery error:', err);
-      setListings([]);
+      setPartners([]);
     } finally {
       setLoading(false);
     }
@@ -116,7 +118,6 @@ export const DiscoverPage: React.FC = () => {
 
   const handleCategorySelect = (slug: string) => {
     setSelectedCategorySlug(slug);
-    // Silent URL update without full page reload
     const newUrl = slug === 'all' ? '/s/discover' : `/s/discover?categorySlug=${slug}`;
     window.history.replaceState({}, '', newUrl);
   };
@@ -125,12 +126,7 @@ export const DiscoverPage: React.FC = () => {
     return (paise / 100).toLocaleString('en-IN');
   };
 
-  const formatDateTime = (dateString: string) => {
-    const d = new Date(dateString);
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
-  // --- Filter Controls Component (Used in Desktop Sidebar & Mobile Drawer) ---
+  // --- Filter Controls Component ---
   const FilterControls = () => (
     <div className="space-y-6">
       <div>
@@ -168,7 +164,7 @@ export const DiscoverPage: React.FC = () => {
       </div>
 
       <button
-        onClick={searchListings}
+        onClick={searchPartners}
         className="w-full h-14 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/25 active:scale-95 hover:bg-primary/90 transition-all flex items-center justify-center gap-2 mt-4"
       >
         <Search size={18} /> Apply Filters
@@ -200,8 +196,8 @@ export const DiscoverPage: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. Scrollable Category Pills (Sticky below Header) */}
-  <div className="sticky top-16 md:top-20 z-30 border-y border-borderLight/40 bg-surface/50 backdrop-blur-md">
+        {/* 2. Scrollable Category Pills */}
+        <div className="border-y border-borderLight/40 bg-surface/50 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 overflow-x-auto scrollbar-hide">
             <div className="flex items-center gap-2.5 min-w-max">
               <button
@@ -245,7 +241,7 @@ export const DiscoverPage: React.FC = () => {
           </div>
         </aside>
 
-        {/* Listings Grid Area */}
+        {/* Partners Grid Area */}
         <div className="flex-1 pb-24 md:pb-8">
           
           <div className="flex justify-between items-end mb-6 md:mb-8">
@@ -271,82 +267,110 @@ export const DiscoverPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          ) : listings.length === 0 ? (
+          ) : partners.length === 0 ? (
             /* Empty State */
             <div className="bg-surface border border-dashed border-borderLight rounded-[2rem] p-10 md:p-16 flex flex-col items-center justify-center text-center">
               <div className="w-24 h-24 bg-bg rounded-full flex items-center justify-center text-5xl mb-6 shadow-sm">🕵️</div>
-              <h3 className="text-2xl font-black text-textMain mb-2">No listings found</h3>
-              <p className="text-muted font-medium max-w-md text-sm md:text-base mb-8">Try adjusting your filters, changing the city, or increasing your budget to see more amazing partners.</p>
+              <h3 className="text-2xl font-black text-textMain mb-2">No companions found</h3>
+              <p className="text-muted font-medium max-w-md text-sm md:text-base mb-8">Try adjusting your filters, changing the city, or increasing your budget to see more amazing companions.</p>
               <button 
-                onClick={() => { setCity(''); setMaxBudget(5000); handleCategorySelect('all'); searchListings(); }} 
+                onClick={() => { setCity(''); setMaxBudget(5000); handleCategorySelect('all'); searchPartners(); }} 
                 className="px-8 py-4 bg-primary text-white rounded-full font-bold active:scale-95 transition-transform shadow-lg shadow-primary/25"
               >
                 Clear all filters
               </button>
             </div>
           ) : (
-            /* Listings Grid */
+            /* Partners Grid */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5 md:gap-6">
-              {listings.map((c) => (
+              {partners.map((p) => (
                 <div
-                  key={c._id}
-                  onClick={() => navigate(`/s/listings/${c._id}`)}
+                  key={p._id}
+                  onClick={() => navigate(`/s/partner/${p.partnerId}`)}
                   className="bg-surface rounded-[2rem] border border-borderLight overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group cursor-pointer flex flex-col relative"
                 >
                   {/* Image & Badges Overlay */}
                   <div className="relative aspect-[4/5] overflow-hidden bg-bg">
                     <img
-                      src={c.profile.primaryPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                      alt={c.profile.displayName}
+                      src={p.primaryPhoto || (p.photos && p.photos[0]) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                      alt={p.displayName}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
                     />
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#111] via-[#111]/20 to-transparent"></div>
 
-                    <div className="absolute top-4 left-4 flex gap-2 z-10">
+                    {/* Top badges */}
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
                       <span className="bg-white/90 backdrop-blur-md text-success-text px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
                         <ShieldCheck size={14} strokeWidth={3} /> Verified
                       </span>
+                      {p.isAvailableNow && (
+                        <span className="bg-emerald-500/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Available
+                        </span>
+                      )}
                     </div>
 
+                    {/* Bottom overlay info */}
                     <div className="absolute bottom-4 left-4 right-4 z-10 flex justify-between items-end">
                       <div className="flex-1 pr-2">
-                        <h3 className="font-black text-white text-2xl md:text-3xl drop-shadow-md line-clamp-1 mb-1">{c.title || c.profile.displayName}</h3>
-                        <p className="text-white/90 text-xs md:text-sm font-bold drop-shadow-sm flex items-center gap-1.5">
-                          <MapPin size={14} className="text-primary-300" /> {c.area}, {c.city}
-                        </p>
+                        <h3 className="font-black text-white text-2xl md:text-3xl drop-shadow-md line-clamp-1 mb-1">{p.displayName}</h3>
+                        {(p.area || p.city) && (
+                          <p className="text-white/90 text-xs md:text-sm font-bold drop-shadow-sm flex items-center gap-1.5">
+                            <MapPin size={14} className="text-primary-300" /> {[p.area, p.city].filter(Boolean).join(', ')}
+                          </p>
+                        )}
                       </div>
                       <div className="bg-black/60 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-sm border border-white/10 shrink-0 mb-1">
                         <Star size={14} className="text-amber-400 fill-amber-400" /> 
-                        {c.profile.ratingAverage?.toFixed(1) || '5.0'}
+                        {(p.ratingAvg || 5.0).toFixed(1)}
                       </div>
                     </div>
                   </div>
 
                   {/* Card Content Footer */}
                   <div className="p-5 md:p-6 flex flex-col flex-1 bg-surface">
-                    <p className="text-sm font-medium text-muted line-clamp-2 mb-5 leading-relaxed">
-                      {c.description || 'Join me for an amazing experience. Fully professional and verified companion.'}
+                    <p className="text-sm font-medium text-muted line-clamp-2 mb-4 leading-relaxed">
+                      {p.bio || 'Join me for an amazing experience. Fully professional and verified companion.'}
                     </p>
                     
+                    {/* Category tags */}
+                    {p.categories && p.categories.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {p.categories.slice(0, 3).map((cat: any, idx: number) => (
+                          <span key={idx} className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                            {cat.categoryId?.name || 'Service'}
+                          </span>
+                        ))}
+                        {p.categories.length > 3 && (
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-bg text-muted">
+                            +{p.categories.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-auto space-y-4">
+                      {/* Stats row */}
                       <div className="flex items-center justify-between text-[11px] md:text-xs font-bold text-muted bg-bg px-4 py-3 rounded-xl border border-borderLight/50">
-                        <div className="flex items-center gap-2 truncate">
-                          <Calendar size={16} className="text-primary shrink-0" />
-                          <span className="truncate">{formatDateTime(c.startAt)}</span>
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-primary shrink-0" />
+                          <span>{p.openListings || 0} open listing{p.openListings !== 1 ? 's' : ''}</span>
                         </div>
-                        <div className="shrink-0 bg-primary/10 text-primary px-2 py-1 rounded-md">
-                          {c.durationMins}m
+                        <div className="flex items-center gap-2">
+                          <MessageCircle size={14} className="text-primary shrink-0" />
+                          <span>{p.ratingCount || 0} review{p.ratingCount !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
                       
                       <div className="flex justify-between items-center pt-2">
                         <div>
-                          <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-0.5">Rate</p>
-                          <span className="font-black text-primary text-2xl">₹{formatCurrency(c.basePricePaise)}</span>
+                          <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-0.5">Starts from</p>
+                          <span className="font-black text-primary text-2xl">₹{formatCurrency(p.hourlyRatePaise)}</span>
+                          <span className="text-xs font-bold text-muted">/hr</span>
                         </div>
                         <button className="h-12 px-6 bg-textMain text-bg font-black rounded-xl active:scale-95 transition-transform shadow-md hover:opacity-90">
-                          View Details
+                          View Profile
                         </button>
                       </div>
                     </div>

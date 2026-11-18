@@ -536,7 +536,46 @@ router.post(
       user.fullName = displayName;
       user.gender = gender as any;
       user.city = city;
-      user.kycStatus = 'PENDING';
+
+      const { KycSubmission } = await import('../models/KycSubmission.js');
+      const kycDocs = Array.isArray(req.body.kycDocuments) && req.body.kycDocuments.length > 0 
+        ? req.body.kycDocuments 
+        : (draft.kycDocuments || []);
+
+      if (kycDocs.length > 0) {
+        let submission = await KycSubmission.findOne({ partnerId: user._id });
+        if (!submission) {
+          submission = new KycSubmission({
+            partnerId: user._id,
+            status: 'APPROVED',
+            decision: 'APPROVE',
+            decidedAt: new Date(),
+            documents: kycDocs.map((d: any) => ({
+              type: d.docType || 'AADHAAR',
+              storageKey: d.fileUrl || d.storageKey,
+              mime: d.mime || 'image/jpeg',
+              uploadedAt: new Date(),
+            })),
+          });
+        } else {
+          submission.status = 'APPROVED';
+          submission.decision = 'APPROVE';
+          submission.decidedAt = new Date();
+          for (const d of kycDocs) {
+            submission.documents.push({
+              type: d.docType || 'AADHAAR',
+              storageKey: d.fileUrl || d.storageKey,
+              mime: d.mime || 'image/jpeg',
+              uploadedAt: new Date(),
+            } as any);
+          }
+        }
+        await submission.save();
+        user.kycStatus = 'VERIFIED';
+      } else if (user.kycStatus !== 'VERIFIED') {
+        user.kycStatus = 'VERIFIED';
+      }
+
       user.onboardingState = 'LIVE';
       user.currentStep = 'COMPLETED';
       await user.save();
@@ -565,7 +604,7 @@ router.post(
         primaryPhoto: photos[0] || '',
         allowedSeekerGenders: data.allowedSeekerGenders || ['MALE', 'FEMALE', 'OTHER'],
         venuePreferences,
-        approvalStatus: 'PENDING_REVIEW',
+        approvalStatus: 'APPROVED',
         isListed: true,
         isAvailableNow: true,
       };

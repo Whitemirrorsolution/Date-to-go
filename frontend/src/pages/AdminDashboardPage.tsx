@@ -374,12 +374,34 @@ export const AdminDashboardPage: React.FC = () => {
 
                   {/* Partners */}
                   {activeTab === 'partners' && (
-                    <button 
-                      onClick={() => setSelectedUserIdForDetails(item.userId?._id || item.userId || item._id)} 
-                      className="btn-sm bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold transition-colors"
-                    >
-                      View 360° Profile
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => setSelectedUserIdForDetails(item.userId?._id || item.userId || item._id)} 
+                        className="btn-sm bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold transition-colors"
+                      >
+                        View 360° Profile
+                      </button>
+                      {item.approvalStatus !== 'APPROVED' ? (
+                        <button 
+                          onClick={() => handleAction(`/admin/partners/${item._id}/approval`, { approvalStatus: 'APPROVED' }, 'PATCH')} 
+                          className="btn-sm bg-success-bg text-success-text hover:bg-success-text hover:text-white font-bold"
+                        >
+                          Approve
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            const reason = window.prompt('Reason for rejecting/revoking partner approval:');
+                            if (reason !== null) {
+                              handleAction(`/admin/partners/${item._id}/approval`, { approvalStatus: 'REJECTED', reason: reason || 'Admin revoked approval' }, 'PATCH');
+                            }
+                          }} 
+                          className="btn-sm bg-failed-bg text-failed-text hover:bg-failed-text hover:text-white font-bold"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </>
                   )}
                   
                   {/* Payouts */}

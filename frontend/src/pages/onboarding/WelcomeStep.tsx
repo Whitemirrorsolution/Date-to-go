@@ -14,7 +14,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({ onStart, onLogin }) =>
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="flex flex-col items-center text-center space-y-6"
+      className="flex flex-col items-center text-center space-y-5 sm:space-y-6 w-full max-w-md mx-auto my-auto py-2"
     >
       {/* Hero Badge */}
       <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-pink-50 border border-pink-200/60 text-pink-700 text-xs font-bold shadow-sm">

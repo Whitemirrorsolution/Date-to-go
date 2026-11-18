@@ -274,10 +274,10 @@ export const SeekerBranchWizard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-rose-50/40 via-white to-pink-50/20 flex flex-col justify-between antialiased selection:bg-pink-500/20">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-rose-50/40 via-white to-pink-50/20 flex flex-col justify-between antialiased selection:bg-pink-500/20 overflow-x-hidden">
       {/* ── Top App Bar ── */}
-      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-rose-100">
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-rose-100 shrink-0">
+        <div className="max-w-xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="w-10">
             {step > 1 && (
               <button
@@ -319,7 +319,7 @@ export const SeekerBranchWizard: React.FC = () => {
       </header>
 
       {/* ── Main Content Container ── */}
-      <main className="flex-1 max-w-md w-full mx-auto px-5 py-6 flex flex-col justify-between">
+      <main className="flex-1 max-w-xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col justify-between">
         <AnimatePresence mode="wait">
           {/* STEP 1: BASICS */}
           {step === 1 && (

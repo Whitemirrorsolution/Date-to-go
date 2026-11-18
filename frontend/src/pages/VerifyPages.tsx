@@ -160,33 +160,33 @@ export const VerifyPages: React.FC = () => {
   const maskedPhone = phone ? `+91 ******${phone.slice(-4)}` : '+91 ******0000';
 
   return (
-    <div className="h-[100dvh] w-full bg-primary flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-[100dvh] w-full bg-primary flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
       
       {/* Left/Top Splash Area */}
-      <div className="flex-none lg:flex-1 w-full lg:w-1/2 flex flex-col relative p-5 lg:p-12 lg:justify-center">
+      <div className="flex-none lg:flex-1 w-full lg:w-1/2 flex flex-col relative p-4 sm:p-6 lg:p-12 lg:justify-center shrink-0">
         {/* Header */}
-        <div className="pt-safe pb-8 flex items-center relative lg:absolute lg:top-8 lg:left-8 lg:w-full">
-          <button onClick={() => navigate(-1)} className="w-14 h-14 bg-white/15 rounded-full flex items-center justify-center text-white lg:hover:bg-white/25 transition-colors absolute lg:static">
-            <ChevronLeft size={28} />
+        <div className="pt-safe pb-4 lg:pb-8 flex items-center relative lg:absolute lg:top-8 lg:left-8 lg:w-full">
+          <button onClick={() => navigate(-1)} className="w-11 h-11 sm:w-14 sm:h-14 bg-white/15 rounded-full flex items-center justify-center text-white lg:hover:bg-white/25 transition-colors absolute lg:static">
+            <ChevronLeft size={24} className="sm:w-7 sm:h-7" />
           </button>
-          <div className="w-full text-center text-white font-medium text-[22px] lg:hidden">
+          <div className="w-full text-center text-white font-medium text-lg sm:text-[22px] lg:hidden">
             Verify OTP
           </div>
         </div>
 
         {/* Splash Info */}
-        <div className="flex flex-col items-center lg:items-start justify-center mt-2 lg:mt-0 text-center lg:text-left">
-          <div className="hidden lg:flex w-24 h-24 lg:w-32 lg:h-32 rounded-full bg-gradient-to-br from-white/20 to-white/5 border border-white/20 items-center justify-center mb-8 shadow-float">
-            <span className="text-4xl lg:text-5xl text-white font-bold">D2G</span>
+        <div className="flex flex-col items-center lg:items-start justify-center mt-1 lg:mt-0 text-center lg:text-left">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-32 lg:h-32 rounded-full bg-gradient-to-br from-white/20 to-white/5 border border-white/20 flex items-center justify-center mb-2 sm:mb-4 lg:mb-8 shadow-float">
+            <span className="text-2xl sm:text-3xl lg:text-5xl text-white font-bold">D2G</span>
           </div>
-          <h1 className="text-white text-[32px] lg:text-[56px] font-bold leading-tight mb-2 lg:mb-4">Check your SMS</h1>
-          <p className="text-white/80 text-base lg:text-2xl">We've sent a 6-digit code to</p>
-          <p className="text-white font-bold text-lg lg:text-3xl mt-1 lg:mt-2 tracking-widest">{maskedPhone}</p>
+          <h1 className="text-white text-2xl sm:text-3xl lg:text-[56px] font-bold leading-tight mb-1 lg:mb-4">Check your SMS</h1>
+          <p className="text-white/80 text-xs sm:text-sm lg:text-2xl">We've sent a 6-digit code to</p>
+          <p className="text-white font-bold text-sm sm:text-lg lg:text-3xl mt-0.5 lg:mt-2 tracking-widest">{maskedPhone}</p>
         </div>
       </div>
 
       {/* Right/Bottom Auth Card Area */}
-      <div className="bg-white rounded-t-[40px] lg:rounded-none lg:rounded-l-[40px] flex-1 lg:flex-none w-full lg:w-[500px] xl:w-[600px] px-6 lg:px-12 pt-10 pb-safe flex flex-col shadow-[-10px_0_40px_rgba(0,0,0,0.1)] overflow-y-auto hide-scrollbar z-10">
+      <div className="bg-white rounded-t-[32px] sm:rounded-t-[40px] lg:rounded-none lg:rounded-l-[40px] flex-1 w-full lg:w-[500px] xl:w-[600px] px-5 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-8 pb-safe flex flex-col shadow-[-10px_0_40px_rgba(0,0,0,0.1)] lg:overflow-y-auto z-10 min-h-0">
         
         <div className="hidden lg:block mb-8">
           <h2 className="text-3xl font-black text-textMain">Verification</h2>

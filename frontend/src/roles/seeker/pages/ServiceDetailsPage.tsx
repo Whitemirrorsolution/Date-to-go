@@ -83,19 +83,28 @@ export const ServiceDetailsPage: React.FC = () => {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [existingBooking, setExistingBooking] = useState<any | null>(null);
 
-  const canSendRequest = !existingBooking || ['DECLINED', 'CANCELLED', 'EXPIRED'].includes(existingBooking.status);
+  const canSendRequest = !existingBooking || ['DECLINED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(existingBooking.stage || existingBooking.status);
 
   useEffect(() => {
     fetchListing();
   }, [id]);
 
-  // Fetch any existing booking for this seeker-partner pair
+  // Fetch any existing active booking for this seeker-partner pair
   useEffect(() => {
     if (!listing) return;
-    api.get<any>(`/bookings?listingId=${listing._id}&seekerId=current`).then((res: any) => {
+    api.get<any>('/bookings').then((res: any) => {
       const items = res?.data?.data || res?.data;
-      if (Array.isArray(items) && items.length > 0) {
-        setExistingBooking(items[0]);
+      if (Array.isArray(items)) {
+        const pId = (listing as any).partnerId?._id?.toString() || (listing as any).partnerId?.toString();
+        const match = items.find((b: any) => {
+          const bListingId = (b.listingId?._id || b.listingId)?.toString();
+          const bPartnerId = (b.partnerId?._id || b.partnerId)?.toString();
+          return (bListingId === listing._id || (pId && bPartnerId === pId)) &&
+            !['DECLINED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(b.stage || b.status);
+        });
+        if (match) {
+          setExistingBooking(match);
+        }
       }
     }).catch(console.error);
   }, [listing]);

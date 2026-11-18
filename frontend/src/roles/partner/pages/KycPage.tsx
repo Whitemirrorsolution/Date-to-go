@@ -161,13 +161,13 @@ export const KycPage: React.FC = () => {
   const showStickyFooter = canUpload && docs.length > 0;
 
   return (
-    <div className="h-[100dvh] overflow-hidden w-full flex flex-col bg-bg">
+    <div className="min-h-[100dvh] w-full flex flex-col bg-bg overflow-x-hidden">
       {/* Main PWA Container */}
       <div className="w-full flex-1 flex flex-col bg-bg relative">
         
         {/* Sticky Header */}
-        <header className="absolute top-0 left-0 w-full z-40 bg-bg/90 backdrop-blur-xl border-b border-borderLight/50 pt-safe transition-all">
-          <div className="h-14 px-4 flex items-center gap-3 max-w-4xl mx-auto w-full">
+        <header className="sticky top-0 left-0 w-full z-40 bg-bg/95 backdrop-blur-xl border-b border-borderLight/50 pt-safe transition-all">
+          <div className="h-14 px-4 sm:px-6 flex items-center gap-3 max-w-4xl mx-auto w-full">
             <button onClick={goBack} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface border border-borderLight active:scale-95 transition-transform">
               <ChevronLeft size={20} />
             </button>
@@ -177,7 +177,7 @@ export const KycPage: React.FC = () => {
 
         {/* Global Notification Toast */}
         {notification && (
-          <div className="absolute top-[80px] left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-[360px] animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-[360px] animate-in slide-in-from-top-4 fade-in duration-300">
             <div className={`p-4 rounded-2xl shadow-xl flex items-start gap-3 border ${
               notification.type === 'error' ? 'bg-failed-bg border-failed-text/30 text-failed-text' : 'bg-success-text/10 border-success-text/30 text-success-text'
             }`}>
@@ -188,7 +188,7 @@ export const KycPage: React.FC = () => {
         )}
 
         {/* Scrollable Content */}
-        <main className={`flex-1 overflow-y-auto px-5 pt-24 ${showStickyFooter ? 'pb-40' : 'pb-8'} scrollbar-hide max-w-4xl mx-auto w-full`}>
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scrollbar-hide max-w-4xl mx-auto w-full">
           
           <div className="flex flex-col items-center text-center mb-6 mt-2">
             <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary mb-3">
@@ -343,7 +343,7 @@ export const KycPage: React.FC = () => {
 
         {/* Sticky Submit Footer */}
         {showStickyFooter && (
-          <div className="absolute bottom-0 left-0 w-full z-40 bg-surface/90 backdrop-blur-xl border-t border-borderLight/50 pb-safe animate-in slide-in-from-bottom-8 flex justify-center">
+          <div className="sticky bottom-0 left-0 w-full z-40 bg-surface/95 backdrop-blur-xl border-t border-borderLight/50 pb-safe animate-in slide-in-from-bottom-8 flex justify-center">
             <div className="max-w-4xl mx-auto w-full p-4">
               <label className="flex items-start gap-3 mb-4 cursor-pointer p-2 bg-bg rounded-xl border border-borderLight">
                 <div className="shrink-0 mt-0.5">

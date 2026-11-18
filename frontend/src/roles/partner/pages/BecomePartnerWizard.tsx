@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../../services/api.js';
+import { useAuth } from '../../../context/AuthContext.js';
 import { 
   CheckCircle2, ChevronRight, AlertCircle, Camera, 
   ChevronLeft, UploadCloud, Shield, Loader2, Sparkles, 
@@ -9,15 +10,32 @@ import {
 
 type Step = 'BASICS' | 'LOCATION' | 'LIFESTYLE' | 'INTERESTS' | 'SERVICES' | 'PHOTOS' | 'KYC' | 'REVIEW';
 
-const stepsOrder: Step[] = ['BASICS', 'LOCATION', 'LIFESTYLE', 'INTERESTS', 'SERVICES', 'PHOTOS', 'KYC', 'REVIEW'];
-
 export const BecomePartnerWizard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<Step>('BASICS');
   const [health, setHealth] = useState<any>(null);
+  const [kycStatus, setKycStatus] = useState<string>('NOT_SUBMITTED');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isKycVerified = useMemo(() => {
+    return (
+      user?.kycStatus === 'VERIFIED' ||
+      kycStatus === 'APPROVED' ||
+      kycStatus === 'SUBMITTED' ||
+      health?.items?.find((i: any) => i.key === 'kycApproved')?.done ||
+      health?.items?.find((i: any) => i.key === 'kycSubmitted')?.done
+    );
+  }, [user?.kycStatus, kycStatus, health]);
+
+  const stepsOrder: Step[] = useMemo(() => {
+    if (isKycVerified) {
+      return ['BASICS', 'LOCATION', 'LIFESTYLE', 'INTERESTS', 'SERVICES', 'PHOTOS', 'REVIEW'];
+    }
+    return ['BASICS', 'LOCATION', 'LIFESTYLE', 'INTERESTS', 'SERVICES', 'PHOTOS', 'KYC', 'REVIEW'];
+  }, [isKycVerified]);
 
   // Form State
   const [formData, setFormData] = useState<any>({
@@ -62,14 +80,15 @@ export const BecomePartnerWizard: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const profileRes = await api.get<any>('/partner/profile');
-      
-      const [healthRes, catRes] = await Promise.all([
-        api.get<any>('/partner/profile/health'),
-        api.get<any>('/categories'),
+      const [profileRes, healthRes, catRes, kycRes] = await Promise.all([
+        api.get<any>('/partner/profile').catch(() => ({ data: null })),
+        api.get<any>('/partner/profile/health').catch(() => ({ data: null })),
+        api.get<any>('/categories').catch(() => ({ data: null })),
+        api.get<any>('/partner/kyc').catch(() => ({ data: null })),
       ]);
-      setHealth(healthRes.data);
-      setCategoriesList(catRes.data || []);
+      if (healthRes.data) setHealth(healthRes.data);
+      if (catRes.data) setCategoriesList(catRes.data || []);
+      if (kycRes.data?.status) setKycStatus(kycRes.data.status);
       if (profileRes.data) {
         const pd = { ...profileRes.data };
         if (pd.dob && pd.dob.includes('T')) pd.dob = pd.dob.split('T')[0];
@@ -555,6 +574,33 @@ export const BecomePartnerWizard: React.FC = () => {
         );
 
       case 'KYC':
+        if (isKycVerified) {
+          return (
+            <div className="animate-in fade-in slide-in-from-right-4 space-y-6">
+              <div>
+                <h2 className="text-3xl font-black mb-1">Identity Verified</h2>
+                <p className="text-muted text-sm">Your documents were verified during onboarding.</p>
+              </div>
+
+              <div className="bg-surface border border-emerald-500/30 rounded-3xl p-8 text-center shadow-lg relative overflow-hidden">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={36} />
+                </div>
+                <h3 className="font-bold text-xl mb-2 text-textMain">KYC Completed</h3>
+                <p className="text-sm text-muted mb-6 max-w-md mx-auto">
+                  Your identity documents were already verified during onboarding. You do not need to re-upload documents.
+                </p>
+
+                <button
+                  onClick={() => setCurrentStep('REVIEW')}
+                  className="px-8 h-12 bg-primary text-white rounded-2xl font-bold active:scale-95 transition-transform"
+                >
+                  Continue to Review
+                </button>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="animate-in fade-in slide-in-from-right-4 space-y-6">
             <div>
@@ -581,32 +627,40 @@ export const BecomePartnerWizard: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-right-4 space-y-6">
             <div>
               <h2 className="text-3xl font-black mb-1">Final Step</h2>
-              <p className="text-muted text-sm">Review before submitting.</p>
+              <p className="text-muted text-sm">Review your updated profile details before saving.</p>
             </div>
             
             {health && (
               <div className="bg-surface rounded-3xl p-6 border border-borderLight shadow-lg">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-lg">Profile Score</h3>
-                  <span className={`text-xl font-black ${health.score >= 90 ? 'text-success-text' : 'text-primary'}`}>{health.score}%</span>
+                  <span className={`text-xl font-black ${health.score >= 90 || isKycVerified ? 'text-success-text' : 'text-primary'}`}>
+                    {isKycVerified ? Math.max(health.score, 90) : health.score}%
+                  </span>
                 </div>
                 
                 <div className="w-full bg-bg rounded-full h-3 mb-6 overflow-hidden border border-borderLight">
-                  <div className={`h-full transition-all duration-1000 ${health.score >= 90 ? 'bg-success-text' : 'bg-primary'}`} style={{ width: `${health.score}%` }}></div>
+                  <div
+                    className={`h-full transition-all duration-1000 ${health.score >= 90 || isKycVerified ? 'bg-success-text' : 'bg-primary'}`}
+                    style={{ width: `${isKycVerified ? Math.max(health.score, 90) : health.score}%` }}
+                  ></div>
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-xs font-bold uppercase text-muted tracking-wider">Checklist</p>
-                  {health.items.filter((i: any) => i.mandatory).map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-start gap-3 bg-bg p-3 rounded-xl border border-borderLight/50">
-                      {item.done ? (
-                        <CheckCircle2 size={18} className="text-success-text shrink-0 mt-0.5" />
-                      ) : (
-                        <div className="w-4.5 h-4.5 rounded-full border-2 border-muted shrink-0 mt-0.5" />
-                      )}
-                      <span className={`text-sm font-semibold ${item.done ? 'text-textMain/70' : 'text-textMain'}`}>{item.label}</span>
-                    </div>
-                  ))}
+                  {health.items.filter((i: any) => i.mandatory).map((item: any, idx: number) => {
+                    const isDone = item.done || (isKycVerified && (item.key === 'kycSubmitted' || item.key === 'kycApproved'));
+                    return (
+                      <div key={idx} className="flex items-start gap-3 bg-bg p-3 rounded-xl border border-borderLight/50">
+                        {isDone ? (
+                          <CheckCircle2 size={18} className="text-success-text shrink-0 mt-0.5" />
+                        ) : (
+                          <div className="w-4.5 h-4.5 rounded-full border-2 border-muted shrink-0 mt-0.5" />
+                        )}
+                        <span className={`text-sm font-semibold ${isDone ? 'text-textMain/70' : 'text-textMain'}`}>{item.label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -616,13 +670,13 @@ export const BecomePartnerWizard: React.FC = () => {
   };
 
   return (
-    <div className="h-[100dvh] overflow-hidden w-full flex flex-col bg-bg">
+    <div className="min-h-[100dvh] w-full flex flex-col bg-bg overflow-x-hidden">
       {/* Main App Container */}
       <div className="w-full flex-1 flex flex-col bg-bg relative">
         
         {/* Sticky Header with Progress */}
-        <div className="absolute top-0 left-0 w-full z-50 bg-bg/90 backdrop-blur-xl border-b border-borderLight/50 pt-safe flex flex-col items-center">
-          <div className="h-14 flex items-center justify-between px-4 max-w-4xl w-full">
+        <div className="sticky top-0 left-0 w-full z-40 bg-bg/95 backdrop-blur-xl border-b border-borderLight/50 pt-safe flex flex-col items-center">
+          <div className="h-14 flex items-center justify-between px-4 sm:px-6 max-w-4xl w-full">
             <div className="flex items-center gap-2 text-primary font-bold">
               <Sparkles size={18} /> <span className="tracking-tight">Partner Setup</span>
             </div>
@@ -637,7 +691,7 @@ export const BecomePartnerWizard: React.FC = () => {
         </div>
 
         {/* Scrollable Form Content */}
-        <div id="wizard-scroll-container" className="flex-1 overflow-y-auto px-5 pt-24 pb-32 hide-scrollbar max-w-4xl mx-auto w-full">
+        <div id="wizard-scroll-container" className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 max-w-4xl mx-auto w-full">
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl text-sm flex items-start gap-3 animate-in slide-in-from-top-2">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
@@ -652,7 +706,7 @@ export const BecomePartnerWizard: React.FC = () => {
         </div>
 
         {/* Sticky Action Footer */}
-        <div className="absolute bottom-0 left-0 w-full z-50 bg-bg/90 backdrop-blur-xl border-t border-borderLight/50 pb-safe flex justify-center">
+        <div className="sticky bottom-0 left-0 w-full z-40 bg-bg/95 backdrop-blur-xl border-t border-borderLight/50 pb-safe flex justify-center">
           <div className="max-w-4xl w-full p-4 flex items-center justify-between gap-3">
             {currentIndex > 0 ? (
               <button 
@@ -669,10 +723,10 @@ export const BecomePartnerWizard: React.FC = () => {
             {currentStep === 'REVIEW' ? (
               <button 
                 onClick={submitForReview} 
-                disabled={(!health?.canCreateListings && health?.score < 90) || saving} 
+                disabled={saving || (!isKycVerified && !health?.canCreateListings && health?.score < 90)} 
                 className="flex-1 h-14 rounded-2xl bg-success-text text-white font-bold text-lg active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-success-text/30 disabled:opacity-50 disabled:active:scale-100"
               >
-                {saving ? <Loader2 size={20} className="animate-spin" /> : 'Submit for Review'}
+                {saving ? <Loader2 size={20} className="animate-spin" /> : 'Save Profile Updates'}
               </button>
             ) : (
               <button 

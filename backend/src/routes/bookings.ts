@@ -36,7 +36,13 @@ router.use(requireAuth, requireRole('SEEKER', 'PARTNER'), requireCompleteProfile
 // ── Validation schemas ─────────────────────────────────────────────────────
 
 const HoldListingSchema = z.object({
-  listingId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid listingId'),
+  listingId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid listingId').optional(),
+  partnerId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid partnerId').optional(),
+  durationMins: z.number().min(30).max(720).optional(),
+  venueName: z.string().optional(),
+  date: z.string().optional(),
+}).refine(data => data.listingId || data.partnerId, {
+  message: 'Either listingId or partnerId must be provided',
 });
 
 export const ConfirmHoldSchema = z.object({
@@ -45,29 +51,105 @@ export const ConfirmHoldSchema = z.object({
   razorpay_signature: z.string().min(1),
 });
 
-async function createBookingRequest(listingId: string, userId: string) {
+async function createBookingRequest(
+  dto: {
+    listingId?: string | undefined;
+    partnerId?: string | undefined;
+    durationMins?: number | undefined;
+    venueName?: string | undefined;
+    date?: string | undefined;
+  },
+  userId: string
+) {
+  let targetListingId = dto.listingId;
+
+  // On-demand listing creation for direct companion booking
+  if (!targetListingId && dto.partnerId) {
+    if (dto.partnerId.toString() === userId) {
+      throw new AppError('You cannot book your own companion profile', 400, 'SELF_BOOKING_PROHIBITED');
+    }
+
+    let openListing = await Listing.findOne({
+      partnerId: dto.partnerId,
+      status: 'OPEN',
+      startAt: { $gt: new Date() },
+    });
+
+    if (!openListing) {
+      const profile = await PartnerProfile.findOne({ userId: dto.partnerId });
+      const catRate = profile?.categories?.[0];
+      const ratePaise = catRate?.hourlyRatePaise || 50000;
+      const duration = dto.durationMins || 120;
+      const durationHours = duration / 60;
+      const totalPricePaise = Math.round(ratePaise * durationHours);
+
+      const startAt = dto.date ? new Date(dto.date) : new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
+
+      const { Category } = await import('../models/Category.js');
+      let catId = catRate?.categoryId;
+      if (!catId) {
+        const defaultCat = await Category.findOne({ isActive: true });
+        catId = defaultCat?._id as any;
+      }
+
+      openListing = await Listing.create({
+        partnerId: dto.partnerId,
+        categoryId: catId,
+        title: `Companion Meetup with ${profile?.displayName || 'Verified Companion'}`,
+        description: `Direct booking meetup with verified companion in ${profile?.city || 'city'}`,
+        startAt,
+        endAt,
+        durationMins: duration,
+        city: profile?.city || 'Delhi',
+        area: profile?.area || 'Central Area',
+        pincode: profile?.pincode || '110001',
+        venueType: 'CAFE',
+        venueName: dto.venueName || 'Popular Public Cafe / Lounge',
+        venueAddress: 'Coordinate venue in chat upon booking confirmation',
+        basePricePaise: totalPricePaise,
+        status: 'OPEN',
+      });
+    }
+
+    targetListingId = openListing._id.toString();
+  }
+
   // Find the listing and ensure it is open
-  const listing = await Listing.findOne({ _id: listingId, status: 'OPEN' });
+  const listing = await Listing.findOne({ _id: targetListingId, status: 'OPEN' });
   if (!listing) throw new AppError('Listing is no longer available', 400, 'LISTING_UNAVAILABLE');
   if (listing.partnerId.toString() === userId) {
     throw new AppError('You cannot book your own listing', 400, 'SELF_BOOKING_PROHIBITED');
   }
 
-  // ------ Duplicate Request Guard ------
-  // The BookingRequest schema has a unique index that prevents a client from
-  // having multiple active requests (REQUESTED/ACCEPTED) for the same listing.
-  // When a duplicate key error occurs we want to return the existing booking
-  // instead of bubbling the DB error to the client.
-  const existingRequest = await BookingRequest.findOne({
-    listingId,
+  // ------ Duplicate Request Guard Across Partner & Listing ------
+  // Prevent same user from creating double active requests for the same companion
+  const existingActiveBooking = await Booking.findOne({
     clientId: userId,
+    partnerId: listing.partnerId,
+    stage: { $in: ['REQUESTED', 'ACCEPTED', 'PAID', 'IN_PROGRESS', 'AWAITING_OTP'] },
+  });
+
+  if (existingActiveBooking) {
+    throw new AppError(
+      'You already have an active request or confirmed booking with this companion. Please check your Bookings tab.',
+      409,
+      'ACTIVE_BOOKING_EXISTS'
+    );
+  }
+
+  const existingRequest = await BookingRequest.findOne({
+    clientId: userId,
+    partnerId: listing.partnerId,
     status: { $in: ['REQUESTED', 'ACCEPTED'] },
   });
+
   if (existingRequest) {
-    // There is already a pending request – fetch its booking and return it.
-    const existingBooking = await Booking.findOne({ requestId: existingRequest._id });
-    if (existingBooking) return existingBooking;
-    // Fallback – if for some reason the booking is missing, continue to create a new one.
+    throw new AppError(
+      'You already have a pending date request with this companion. Please wait for them to respond.',
+      409,
+      'PENDING_REQUEST_EXISTS'
+    );
   }
 
   // Create a new booking request as none exists
@@ -198,16 +280,24 @@ async function createBookingRequest(listingId: string, userId: string) {
 }
 
 // Requests are not charged until a partner accepts them.
-router.post('/hold', requireActivePlan, asyncHandler(async (req: Request, res: Response) => {
-  const { listingId } = HoldListingSchema.parse(req.body);
-  const booking = await createBookingRequest(listingId, req.user!.id);
-  res.status(201).json({ success: true, data: { bookingId: booking.id, stage: booking.stage } });
+router.post(['/', '/hold'], requireActivePlan, asyncHandler(async (req: Request, res: Response) => {
+  const dto = HoldListingSchema.parse(req.body);
+  const booking = await createBookingRequest(dto, req.user!.id);
+
+  await Notification.create({
+    userId: booking.partnerId as any,
+    title: 'New Date Request! 📅',
+    body: `Someone has requested a meetup. Open your dashboard to Accept.`,
+    type: 'BOOKING_UPDATE',
+    link: '/p/dashboard',
+  });
+
+  res.status(201).json({ success: true, data: { bookingId: booking._id, stage: booking.stage } });
 }));
 
-// ── POST /:id/confirm-hold — Verify Payment ──────────────────────────────
+// ── POST /:id/accept ───────────────────────────────────────────────────────
 router.post(
   '/:id/accept',
-  requireActivePlan,
   asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.id;
     const booking = await Booking.findOne({ _id: bookingId, partnerId: req.user!.id });
@@ -218,6 +308,17 @@ router.post(
     booking.stage = 'ACCEPTED';
     await booking.save();
 
+    await BookingRequest.findByIdAndUpdate(booking.requestId, {
+      status: 'ACCEPTED',
+      acceptedAt: new Date(),
+      confirmBy: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    await Listing.findOneAndUpdate(
+      { _id: booking.listingId, status: { $in: ['OPEN', 'ACTIVE', 'HELD'] } },
+      { $set: { status: 'HELD' } },
+    );
+
     // Notify seeker that request was accepted
     await Notification.create({
       userId: booking.clientId as any,
@@ -227,7 +328,7 @@ router.post(
       link: '/seeker/dashboard',
     });
 
-    res.status(200).json({ success: true, data: { bookingId: booking._id, stage: booking.stage } });
+    res.status(200).json({ success: true, message: 'Booking accepted.', data: { bookingId: booking._id, stage: booking.stage } });
   })
 );
 
@@ -695,25 +796,7 @@ router.post(
   })
 );
 
-// ── POST / — Send Request directly ─────────────────────────────────────────
-router.post(
-  '/',
-  requireActivePlan,
-  asyncHandler(async (req: Request, res: Response) => {
-    const dto = HoldListingSchema.parse(req.body);
-    const booking = await createBookingRequest(dto.listingId, req.user!.id);
 
-    await Notification.create({
-      userId: booking.partnerId as any,
-      title: 'New Date Request! 📅',
-      body: `Someone has requested your listing. Open your dashboard to Accept.`,
-      type: 'BOOKING_UPDATE',
-      link: '/p/dashboard',
-    });
-
-    res.status(200).json({ success: true, data: { bookingId: booking._id } });
-  })
-);
 
 // ── GET / — User's Bookings List ───────────────────────────────────────────
 router.get(

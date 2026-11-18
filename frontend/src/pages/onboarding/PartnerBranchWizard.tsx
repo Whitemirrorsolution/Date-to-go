@@ -453,10 +453,10 @@ export const PartnerBranchWizard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col justify-between antialiased selection:bg-indigo-500/30">
+    <div className="min-h-[100dvh] w-full bg-slate-950 text-slate-100 flex flex-col justify-between antialiased selection:bg-indigo-500/30 overflow-x-hidden">
       {/* ── Top Header ── */}
       <header className="sticky top-0 z-30 w-full bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="w-10">
             {step > 1 && (
               <button
@@ -498,7 +498,7 @@ export const PartnerBranchWizard: React.FC = () => {
       </header>
 
       {/* ── Main Step Container ── */}
-      <main className="flex-1 max-w-md w-full mx-auto px-5 py-6 flex flex-col justify-between">
+      <main className="flex-1 max-w-xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col justify-between">
         <AnimatePresence mode="wait">
           {/* STEP 1: BASICS */}
           {step === 1 && (
@@ -986,7 +986,7 @@ export const PartnerBranchWizard: React.FC = () => {
         </AnimatePresence>
 
         {/* ── Footer Navigation ── */}
-        <div className="pt-6 space-y-3">
+        <div className="pt-6 pb-safe space-y-3">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle size={15} className="shrink-0 text-rose-400" />

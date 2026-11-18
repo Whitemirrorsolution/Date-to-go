@@ -220,7 +220,7 @@ export class PaymentService {
       await Notification.create({
         userId: booking.partnerId,
         title: 'Payment Received! Date Confirmed 🎉',
-        message: `Payment for your booking at ${booking.venueName} has been received into escrow. Chat is now open!`,
+        body: `Payment for your booking at ${booking.venueName} has been received into escrow. Chat is now open!`,
         type: 'BOOKING_UPDATE',
       });
     }

@@ -5,7 +5,7 @@ import {
   ChevronLeft, ShieldCheck, Star, MapPin, Globe,
   Briefcase, Heart, Calendar, Clock, ChevronRight,
   ChevronLeft as PhotoLeft, Sparkles, AlertCircle,
-  MessageSquare
+  MessageSquare, CheckCircle2
 } from 'lucide-react';
 
 interface OpenListing {
@@ -57,6 +57,52 @@ export const PartnerPublicProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [requestingDirect, setRequestingDirect] = useState(false);
+  const [directBookingSuccess, setDirectBookingSuccess] = useState(false);
+  const [directBookingError, setDirectBookingError] = useState<string | null>(null);
+  const [existingBooking, setExistingBooking] = useState<any | null>(null);
+
+  // Check if seeker already has an active booking with this companion
+  useEffect(() => {
+    if (!id) return;
+    api.get<any>('/bookings').then((res: any) => {
+      const items = res?.data || [];
+      if (Array.isArray(items)) {
+        const found = items.find((b: any) => {
+          const pId = (b.partnerId?._id || b.partnerId)?.toString();
+          const targetId = id.toString();
+          const pUserId = profile?.userId?.toString();
+          return (pId === targetId || pId === pUserId) &&
+            ['REQUESTED', 'ACCEPTED', 'PAID', 'IN_PROGRESS', 'AWAITING_OTP'].includes(b.stage || b.status);
+        });
+        if (found) {
+          setExistingBooking(found);
+        }
+      }
+    }).catch(() => {});
+  }, [id, profile]);
+
+  const handleDirectRequest = async () => {
+    if (!profile) return;
+    setRequestingDirect(true);
+    setDirectBookingError(null);
+    try {
+      const res = await api.post<any>('/bookings', {
+        partnerId: profile.userId || profile.id,
+        durationMins: 120,
+      });
+      if (res?.data?.bookingId || (res as any)?.bookingId || res?.data) {
+        setDirectBookingSuccess(true);
+        setTimeout(() => {
+          navigate('/s/booking');
+        }, 1500);
+      }
+    } catch (err: any) {
+      setDirectBookingError(err?.response?.data?.message || err?.message || 'Failed to send meetup request');
+    } finally {
+      setRequestingDirect(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -328,12 +374,49 @@ export const PartnerPublicProfilePage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="bg-surface border border-dashed border-borderLight rounded-[2rem] p-10 text-center flex flex-col items-center justify-center">
-                <div className="w-16 h-16 bg-bg rounded-full flex items-center justify-center mb-4 shadow-sm">
-                  <Calendar size={28} className="text-muted" />
+              <div className="bg-surface border border-borderLight rounded-[2rem] p-8 text-center flex flex-col items-center justify-center shadow-sm">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
+                  <Sparkles size={28} />
                 </div>
-                <p className="text-lg font-black text-textMain mb-1">No Open Slots</p>
-                <p className="text-sm font-medium text-muted">This companion hasn't posted any upcoming availability right now.</p>
+                <p className="text-xl font-black text-textMain mb-1">Direct Companion Booking Available</p>
+                <p className="text-sm font-medium text-muted max-w-md mb-4">
+                  {profile.displayName} is verified and accepting companion date requests. Send a direct request for a 2-hour meetup!
+                </p>
+
+                {existingBooking ? (
+                  <div className="p-5 bg-primary/10 border border-primary/20 rounded-2xl flex flex-col items-center gap-3 text-center w-full max-w-sm">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-textMain">Active Request with {profile.displayName}</p>
+                      <p className="text-xs text-muted mt-0.5">Status: <span className="font-bold text-primary">{existingBooking.stage || existingBooking.status}</span></p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/s/booking')}
+                      className="w-full py-2.5 bg-primary text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition-all"
+                    >
+                      View in My Bookings
+                    </button>
+                  </div>
+                ) : directBookingSuccess ? (
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 font-bold rounded-2xl flex items-center gap-2">
+                    <CheckCircle2 size={20} /> Request sent successfully! Redirecting to your bookings...
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 w-full max-w-sm">
+                    {directBookingError && (
+                      <p className="text-xs font-bold text-failed-text bg-failed-bg p-2.5 rounded-xl w-full">{directBookingError}</p>
+                    )}
+                    <button
+                      onClick={handleDirectRequest}
+                      disabled={requestingDirect}
+                      className="w-full h-14 bg-primary text-white font-black text-base rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-primary/30 flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-primary/95"
+                    >
+                      {requestingDirect ? 'Sending Request...' : `Request Meetup with ${profile.displayName} (₹${formatCurrency(profile.hourlyRatePaise * 2)})`}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -369,8 +452,8 @@ export const PartnerPublicProfilePage: React.FC = () => {
       </div>
 
       {/* ── Mobile Sticky CTA (Hidden on Desktop) ── */}
-      {profile.openListings && profile.openListings.length > 0 && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-xl border-t border-borderLight p-4 pb-safe animate-in slide-in-from-bottom-4">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-xl border-t border-borderLight p-4 pb-safe animate-in slide-in-from-bottom-4">
+        {profile.openListings && profile.openListings.length > 0 ? (
           <button
             onClick={() => {
               document.getElementById('listings')?.scrollIntoView({ behavior: 'smooth' });
@@ -379,8 +462,23 @@ export const PartnerPublicProfilePage: React.FC = () => {
           >
             View Available Slots <ChevronRight size={18} />
           </button>
-        </div>
-      )}
+        ) : existingBooking ? (
+          <button
+            onClick={() => navigate('/s/booking')}
+            className="w-full h-14 bg-primary text-white font-black text-base rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-primary/30 flex items-center justify-center gap-2"
+          >
+            View Active Booking ({existingBooking.stage || existingBooking.status})
+          </button>
+        ) : (
+          <button
+            onClick={handleDirectRequest}
+            disabled={requestingDirect || directBookingSuccess}
+            className="w-full h-14 bg-primary text-white font-black text-base rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-primary/30 flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {requestingDirect ? 'Sending Request...' : directBookingSuccess ? 'Request Sent!' : `Request Meetup with ${profile.displayName}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 };

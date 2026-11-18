@@ -20,10 +20,10 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   const progressPercent = Math.min(100, Math.max(0, (currentStep / totalSteps) * 100));
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 via-white to-pink-50/30 flex flex-col justify-between antialiased selection:bg-primary/20">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 via-white to-pink-50/30 flex flex-col justify-between antialiased selection:bg-primary/20 overflow-x-hidden">
       {/* ── Top Header ── */}
-      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-slate-100">
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-slate-100 shrink-0">
+        <div className="max-w-lg mx-auto px-4 h-16 flex items-center justify-between">
           <div className="w-10 flex items-center">
             {showBack && onBack ? (
               <button
@@ -70,13 +70,13 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
       </header>
 
       {/* ── Main Content Area ── */}
-      <main className="flex-1 max-w-md w-full mx-auto px-5 py-6 flex flex-col justify-center">
+      <main className="flex-1 max-w-lg w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col justify-start">
         {children}
       </main>
 
       {/* ── Trust Footer ── */}
-      <footer className="w-full py-4 px-6 text-center text-xs text-slate-400 border-t border-slate-100/60 bg-white/40">
-        <div className="max-w-md mx-auto flex items-center justify-center gap-1.5 font-medium">
+      <footer className="w-full py-4 px-6 text-center text-xs text-slate-400 border-t border-slate-100/60 bg-white/40 shrink-0">
+        <div className="max-w-lg mx-auto flex items-center justify-center gap-1.5 font-medium">
           <ShieldCheck size={14} className="text-emerald-500" />
           <span>18+ Verified Platform • Platonic Only • Escrow Protected</span>
         </div>

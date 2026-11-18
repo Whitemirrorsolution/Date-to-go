@@ -72,7 +72,7 @@ export const AgeConsentStep: React.FC<AgeConsentStepProps> = ({ onSuccess }) => 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="flex flex-col space-y-6"
+      className="flex flex-col space-y-5 sm:space-y-6 w-full max-w-md mx-auto my-auto py-2"
     >
       <div className="space-y-2 text-center sm:text-left">
         <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto sm:mx-0 shadow-sm">
