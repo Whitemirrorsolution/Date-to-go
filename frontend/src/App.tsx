@@ -128,6 +128,7 @@ function AppContent(): JSX.Element {
         <Route path="status" element={<KycPage />} />
         <Route path="suspended" element={<PartnerDashboardPage />} />
         <Route path="profile" element={<PartnerProfilePage />} />
+        <Route path="wallet" element={<WalletPage />} />
         <Route path="renew" element={<PricingPage />} />
         <Route path="booking/:id" element={<PartnerBookingDetailsPage />} />
         <Route path="listings/:id" element={<PartnerListingDetailsPage />} />

@@ -81,9 +81,6 @@ export const PartnerDashboardPage: React.FC = () => {
       if (listingsRes.data) setListings(listingsRes.data);
       if (ledgerRes?.records) setLedger(ledgerRes.records);
       if (payoutsRes.data) setPayoutsList(payoutsRes.data);
-
-      console.log("booking data", bookingsRes)
-      console.log("profile res", profileRes, healthRes, statsRes, catRes, listingsRes)
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -653,7 +650,7 @@ export const PartnerDashboardPage: React.FC = () => {
               <div className="bg-surface border border-borderLight rounded-3xl p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg text-textMain">Recent Transactions</h3>
-                  <button onClick={() => navigate('/wallet')} className="text-primary text-sm font-bold hover:underline">
+                  <button onClick={() => navigate('/p/wallet')} className="text-primary text-sm font-bold hover:underline">
                     Full Ledger →
                   </button>
                 </div>

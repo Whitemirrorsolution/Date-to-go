@@ -56,11 +56,7 @@ export const PartnerBookingDetailsPage: React.FC = () => {
   const handleAccept = async () => {
     setActionLoading(true);
     try {
-      try {
-        await api.post(`/partner/bookings/${id}/accept`);
-      } catch (err) {
-        await api.post(`/bookings/${id}/accept`);
-      }
+      await api.post(`/partner/bookings/${id}/accept`);
       setToastMsg({ text: 'Booking request accepted successfully!', type: 'success' });
       fetchBooking();
     } catch (e: any) {
@@ -74,11 +70,7 @@ export const PartnerBookingDetailsPage: React.FC = () => {
     if (!window.confirm('Are you sure you want to decline this booking request?')) return;
     setActionLoading(true);
     try {
-      try {
-        await api.post(`/partner/bookings/${id}/decline`);
-      } catch (err) {
-        await api.post(`/bookings/${id}/decline`);
-      }
+      await api.post(`/partner/bookings/${id}/decline`);
       setToastMsg({ text: 'Booking request declined.', type: 'success' });
       fetchBooking();
     } catch (e: any) {

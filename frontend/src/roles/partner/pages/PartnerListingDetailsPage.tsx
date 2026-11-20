@@ -132,21 +132,10 @@ export const PartnerListingDetailsPage: React.FC = () => {
         type: 'success' 
       });
     } catch (e: any) {
-      // If patch fails, attempt fallback
-      try {
-        const res2 = await api.post<any>(`/partner/listings/${id}/status`, { status: newStatus });
-        const updated2 = res2?.data || { ...listing, status: newStatus };
-        setListing((prev: any) => ({ ...prev, ...updated2, status: newStatus }));
-        setFeedbackMsg({ 
-          text: `Listing status updated to ${newStatus}.`, 
-          type: 'success' 
-        });
-      } catch (err2: any) {
-        setFeedbackMsg({ 
-          text: e?.message || e?.response?.data?.message || 'Could not update status.', 
-          type: 'error' 
-        });
-      }
+      setFeedbackMsg({ 
+        text: e?.message || e?.response?.data?.message || 'Could not update status.', 
+        type: 'error' 
+      });
     } finally {
       setToggling(false);
     }
