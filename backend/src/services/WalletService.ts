@@ -23,11 +23,12 @@ export class WalletService {
     if (amountPaise === 0) {
       throw new AppError('Transaction amount cannot be zero', 400, 'INVALID_AMOUNT');
     }
+    // Normalize amounts: Credits/refunds must be positive, debits must be negative
     if ((type === 'CREDIT' || type === 'REFUND') && amountPaise < 0) {
-      throw new AppError('Credits must be positive', 400, 'INVALID_AMOUNT');
+      amountPaise = Math.abs(amountPaise);
     }
     if (type === 'DEBIT' && amountPaise > 0) {
-      throw new AppError('Debits must be negative', 400, 'INVALID_AMOUNT');
+      amountPaise = -amountPaise;
     }
 
     const session = await mongoose.startSession();

@@ -5,7 +5,6 @@ import { PayoutRequest, type PayoutStatus } from '../../models/PayoutRequest.js'
 import { walletService } from '../../services/WalletService.js';
 import { AppError } from '../../utils/AppError.js';
 import { Notification } from '../../models/Notification.js';
-import mongoose from 'mongoose';
 
 const router: Router = Router();
 
@@ -72,53 +71,44 @@ router.patch(
       utrNumber: z.string().optional(),
     }).parse(req.body);
 
-    const session = await mongoose.startSession();
-    let payout: any;
+    const payout = await PayoutRequest.findById(req.params['id']);
+    if (!payout) throw new AppError('Payout request not found', 404);
 
-    try {
-      await session.withTransaction(async () => {
-        payout = await PayoutRequest.findById(req.params['id']).session(session);
-        if (!payout) throw new AppError('Payout request not found', 404);
-
-        const oldStatus = payout.status;
-        let targetStatus: PayoutStatus = status as PayoutStatus;
-        if (targetStatus === 'APPROVED' || targetStatus === 'PAID') {
-          targetStatus = 'CONFIRMED';
-        }
-
-        // If transitioning to REJECTED from a non-rejected state, refund wallet balance
-        if (targetStatus === 'REJECTED' && oldStatus !== 'REJECTED') {
-          await walletService.processTransaction(
-            payout.partnerId.toString(),
-            'REFUND',
-            payout.amountPaise,
-            `Payout rejected: ${adminNote || 'No reason provided'}`,
-            'PAYOUT',
-            payout._id.toString(),
-          );
-          payout.rejectedAt = new Date();
-        }
-
-        // If transitioning to CONFIRMED
-        if (targetStatus === 'CONFIRMED') {
-          payout.creditedAt = new Date();
-          if (utrNumber) payout.utrNumber = utrNumber.trim();
-        }
-
-        // If transitioning to PROCESSING
-        if (targetStatus === 'PROCESSING') {
-          payout.processedAt = new Date();
-        }
-
-        payout.status = targetStatus;
-        if (adminNote !== undefined) payout.adminNote = adminNote;
-        if (utrNumber && targetStatus !== 'REJECTED') payout.utrNumber = utrNumber.trim();
-
-        await payout.save({ session });
-      });
-    } finally {
-      await session.endSession();
+    const oldStatus = payout.status;
+    let targetStatus: PayoutStatus = status as PayoutStatus;
+    if (targetStatus === 'APPROVED' || targetStatus === 'PAID') {
+      targetStatus = 'CONFIRMED';
     }
+
+    // If transitioning to REJECTED from a non-rejected state, refund wallet balance
+    if (targetStatus === 'REJECTED' && oldStatus !== 'REJECTED') {
+      await walletService.processTransaction(
+        payout.partnerId.toString(),
+        'REFUND',
+        payout.amountPaise,
+        `Payout rejected: ${adminNote || 'No reason provided'}`,
+        'PAYOUT',
+        payout._id.toString(),
+      );
+      payout.rejectedAt = new Date();
+    }
+
+    // If transitioning to CONFIRMED
+    if (targetStatus === 'CONFIRMED') {
+      payout.creditedAt = new Date();
+      if (utrNumber) payout.utrNumber = utrNumber.trim();
+    }
+
+    // If transitioning to PROCESSING
+    if (targetStatus === 'PROCESSING') {
+      payout.processedAt = new Date();
+    }
+
+    payout.status = targetStatus;
+    if (adminNote !== undefined) payout.adminNote = adminNote;
+    if (utrNumber && targetStatus !== 'REJECTED') payout.utrNumber = utrNumber.trim();
+
+    await payout.save();
 
     // Send real-time notification to partner
     try {
@@ -196,33 +186,24 @@ router.post(
   '/:id/reject',
   asyncHandler(async (req: Request, res: Response) => {
     const { adminNote } = z.object({ adminNote: z.string().optional() }).parse(req.body);
-    const session = await mongoose.startSession();
-    let payout: any;
+    const payout = await PayoutRequest.findById(req.params['id']);
+    if (!payout) throw new AppError('Payout not found', 404);
 
-    try {
-      await session.withTransaction(async () => {
-        payout = await PayoutRequest.findById(req.params['id']).session(session);
-        if (!payout) throw new AppError('Payout not found', 404);
-
-        if (payout.status !== 'REJECTED') {
-          await walletService.processTransaction(
-            payout.partnerId.toString(),
-            'REFUND',
-            payout.amountPaise,
-            `Payout rejected: ${adminNote || 'No reason provided'}`,
-            'PAYOUT',
-            payout._id.toString(),
-          );
-        }
-
-        payout.status = 'REJECTED';
-        payout.adminNote = adminNote || 'Rejected by admin';
-        payout.rejectedAt = new Date();
-        await payout.save({ session });
-      });
-    } finally {
-      await session.endSession();
+    if (payout.status !== 'REJECTED') {
+      await walletService.processTransaction(
+        payout.partnerId.toString(),
+        'REFUND',
+        payout.amountPaise,
+        `Payout rejected: ${adminNote || 'No reason provided'}`,
+        'PAYOUT',
+        payout._id.toString(),
+      );
     }
+
+    payout.status = 'REJECTED';
+    payout.adminNote = adminNote || 'Rejected by admin';
+    payout.rejectedAt = new Date();
+    await payout.save();
 
     try {
       await Notification.create({

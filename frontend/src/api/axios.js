@@ -1,16 +1,37 @@
 import axios from 'axios';
 import { API_URL } from '../config/index.js';
 
-// In-memory token store (survives page transitions, lost on hard refresh)
+// In-memory token store with localStorage fallback for persistence across hard reloads
 let _accessToken = null;
 let _refreshPromise = null;
 
 export function getAccessToken() {
-  return _accessToken;
+  if (_accessToken) return _accessToken;
+  try {
+    const stored = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    if (stored) {
+      _accessToken = stored;
+      return stored;
+    }
+  } catch {
+    // In case localStorage is blocked by browser security settings
+  }
+  return null;
 }
 
 export function setAccessToken(token) {
   _accessToken = token;
+  try {
+    if (token) {
+      localStorage.setItem('accessToken', token);
+      localStorage.setItem('token', token);
+    } else {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('token');
+    }
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 /**
@@ -30,11 +51,12 @@ export async function silentRefresh() {
         }
       );
       const token = res.data?.data?.accessToken || res.data?.accessToken || null;
-      _accessToken = token;
+      if (token) {
+        setAccessToken(token);
+      }
       return token;
     } catch {
-      _accessToken = null;
-      return null;
+      return getAccessToken();
     } finally {
       _refreshPromise = null;
     }
@@ -58,7 +80,11 @@ axiosInstance.interceptors.request.use(
     const token = getAccessToken();
     if (token) {
       reqConfig.headers = reqConfig.headers || {};
-      reqConfig.headers.Authorization = `Bearer ${token}`;
+      if (typeof reqConfig.headers.set === 'function') {
+        reqConfig.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        reqConfig.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return reqConfig;
   },
@@ -80,14 +106,18 @@ axiosInstance.interceptors.response.use(
       );
     }
 
-    // 401: token expired, single retry with refreshed token
+    // 401: token expired or missing, retry once with refreshed token
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const newToken = await silentRefresh();
         if (newToken) {
           originalRequest.headers = originalRequest.headers || {};
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          if (typeof originalRequest.headers.set === 'function') {
+            originalRequest.headers.set('Authorization', `Bearer ${newToken}`);
+          } else {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          }
           return axiosInstance(originalRequest);
         }
       } catch (refreshErr) {

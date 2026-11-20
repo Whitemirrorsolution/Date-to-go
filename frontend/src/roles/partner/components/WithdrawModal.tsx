@@ -145,7 +145,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         onClose();
       }, 1500);
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Failed to submit withdrawal request.';
+      const msg = err.message || err.response?.data?.message || 'Failed to submit withdrawal request.';
       setError(msg);
     } finally {
       setLoading(false);

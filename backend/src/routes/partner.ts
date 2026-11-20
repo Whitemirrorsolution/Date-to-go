@@ -731,40 +731,35 @@ router.post(
       );
     }
 
-    const session = await (await import('mongoose')).default.startSession();
-    let payoutRequest;
+    // Verify balance before initiating withdrawal
+    const currentBalance = await walletService.getBalance(partnerId);
+    if (currentBalance < amountPaise) {
+      throw new AppError('Insufficient wallet balance for withdrawal', 400, 'INSUFFICIENT_BALANCE');
+    }
+
+    const payoutRequest = await PayoutRequest.create({
+      partnerId,
+      amountPaise,
+      method,
+      status: 'PENDING',
+      bankDetails: {
+        ...bankDetails,
+        ifsc: bankDetails.ifsc ? bankDetails.ifsc.toUpperCase() : undefined,
+      },
+    });
+
     try {
-      await session.withTransaction(async () => {
-        // Double check balance in tx
-        const currentBalance = await walletService.getBalance(partnerId);
-        if (currentBalance < amountPaise) {
-          throw new AppError('Insufficient balance', 400);
-        }
-
-        payoutRequest = new PayoutRequest({
-          partnerId,
-          amountPaise,
-          method,
-          status: 'PENDING',
-          bankDetails: {
-            ...bankDetails,
-            ifsc: bankDetails.ifsc ? bankDetails.ifsc.toUpperCase() : undefined,
-          },
-        });
-
-        await payoutRequest.save({ session });
-
-        await walletService.processTransaction(
-          partnerId,
-          'DEBIT',
-          amountPaise,
-          `Withdrawal request #${payoutRequest._id.toString().slice(-6)} (${method === 'UPI' ? 'UPI' : 'Bank'})`,
-          'PAYOUT',
-          payoutRequest._id.toString(),
-        );
-      });
-    } finally {
-      await session.endSession();
+      await walletService.processTransaction(
+        partnerId,
+        'DEBIT',
+        -Math.abs(amountPaise),
+        `Withdrawal request #${payoutRequest._id.toString().slice(-6)} (${method === 'UPI' ? 'UPI' : 'Bank'})`,
+        'PAYOUT',
+        payoutRequest._id.toString(),
+      );
+    } catch (txErr) {
+      await PayoutRequest.findByIdAndDelete(payoutRequest._id);
+      throw txErr;
     }
 
     // Send confirmation notification

@@ -102,12 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     }
   }, []);
 
-  /** Restore session on mount via silent refresh */
+  /** Restore session on mount via existing token or silent refresh */
   useEffect(() => {
     void (async () => {
       setIsLoading(true);
       try {
-        const token = await silentRefresh();
+        let token = getAccessToken();
+        if (!token) {
+          token = await silentRefresh();
+        }
         if (token) {
           await fetchMe();
         }

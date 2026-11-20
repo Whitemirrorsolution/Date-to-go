@@ -34,12 +34,18 @@ export async function authenticate(
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
+  let token: string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  } else if ((req as any).cookies?.accessToken) {
+    token = (req as any).cookies.accessToken;
+  }
+
+  if (!token) {
     return next(new AppError('Authorization header missing or malformed', 401, 'UNAUTHORIZED'));
   }
 
-  const token = authHeader.slice(7);
   let payload;
   try {
     payload = tokenService.verifyAccessToken(token);
