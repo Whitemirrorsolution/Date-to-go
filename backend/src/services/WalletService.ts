@@ -153,6 +153,52 @@ export class WalletService {
       paymentId
     );
   }
+
+  /**
+   * Idempotently credits partner wallet for a paid or completed booking.
+   */
+  async creditPartnerForBooking(booking: any): Promise<boolean> {
+    if (!booking || !booking.partnerId) return false;
+
+    // Check if this booking was already credited to the partner
+    const existing = await WalletLedger.findOne({
+      userId: booking.partnerId,
+      type: 'CREDIT',
+      refType: 'BOOKING',
+      refId: booking._id.toString(),
+    });
+
+    if (existing) {
+      return false; // Already credited
+    }
+
+    const netPaise = booking.partnerNetPaise || booking.basePaise || 0;
+    if (netPaise <= 0) return false;
+
+    await this.processTransaction(
+      booking.partnerId.toString(),
+      'CREDIT',
+      netPaise,
+      `Payment received for companion booking #${booking._id.toString().slice(-6)} at ${booking.venueName || 'Venue'}`,
+      'BOOKING',
+      booking._id.toString()
+    );
+
+    // Create notification for partner
+    try {
+      const { Notification } = await import('../models/Notification.js');
+      await Notification.create({
+        userId: booking.partnerId,
+        title: 'Payment Credited to Wallet! 💰',
+        body: `₹${(netPaise / 100).toFixed(0)} has been credited to your wallet for booking #${booking._id.toString().slice(-6)}.`,
+        type: 'PAYMENT_CREDIT',
+      });
+    } catch {
+      // Non-blocking notification
+    }
+
+    return true;
+  }
 }
 
 export const walletService = new WalletService();

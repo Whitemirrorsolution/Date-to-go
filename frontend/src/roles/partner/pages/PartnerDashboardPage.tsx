@@ -18,6 +18,7 @@ import { AvailabilityBuffersCard } from '../components/AvailabilityBuffersCard.j
 import { PartnerRequestInbox } from '../components/PartnerRequestInbox.js';
 import { PartnerOtpSheet } from '../components/PartnerOtpSheet.js';
 import { setAppBadge } from '../../../pwa/badging.js';
+import { walletApi } from '../../../services/wallet.js';
 
 export type PartnerTabType = 'home' | 'requests' | 'listings' | 'wallet' | 'profile' | 'accepted' | 'rules' | 'templates';
 
@@ -48,8 +49,8 @@ export const PartnerDashboardPage: React.FC = () => {
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   
   const [showCreateListing, setShowCreateListing] = useState(false);
-
   const [activeOtpBookingId, setActiveOtpBookingId] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -58,13 +59,14 @@ export const PartnerDashboardPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [profileRes, healthRes, statsRes, bookingsRes, catRes, listingsRes] = await Promise.all([
+      const [profileRes, healthRes, statsRes, bookingsRes, catRes, listingsRes, ledgerRes] = await Promise.all([
         api.get<any>('/partner/profile').catch(() => ({ data: null })),
         api.get<any>('/partner/profile/health').catch(() => ({ data: null })),
         api.get<any>('/partner/earnings').catch(() => ({ data: null })),
         api.get<any>('/partner/bookings').catch(() => ({ data: null })),
         api.get<any>('/categories').catch(() => ({ data: null })),
-        api.get<any>('/partner/listings').catch(() => ({ data: null }))
+        api.get<any>('/partner/listings').catch(() => ({ data: null })),
+        walletApi.getLedger(10).catch(() => ({ records: [], total: 0 })),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       if (healthRes.data) setHealth(healthRes.data);
@@ -73,6 +75,7 @@ export const PartnerDashboardPage: React.FC = () => {
       if (bData) setBookings(bData);
       if (catRes.data) setCategoriesList(catRes.data);
       if (listingsRes.data) setListings(listingsRes.data);
+      if (ledgerRes?.records) setLedger(ledgerRes.records);
 
       console.log("booking data", bookingsRes)
       console.log("profile res", profileRes, healthRes, statsRes, catRes, listingsRes)
@@ -289,8 +292,8 @@ export const PartnerDashboardPage: React.FC = () => {
                       <div className="w-10 h-10 rounded-full bg-success-text/10 flex items-center justify-center mb-3">
                         <IndianRupee size={20} className="text-success-text" />
                       </div>
-                      <p className="text-xs font-bold text-muted uppercase tracking-wider mb-0.5">Total Earned</p>
-                      <p className="text-2xl md:text-4xl font-black text-textMain">₹{formatCurrency(stats?.totalEarningsPaise || 0)}</p>
+                      <p className="text-xs font-bold text-muted uppercase tracking-wider mb-0.5">Wallet Balance</p>
+                      <p className="text-2xl md:text-4xl font-black text-textMain">₹{formatCurrency(stats?.walletBalancePaise ?? stats?.pendingPayoutPaise ?? 0)}</p>
                     </div>
 
                     <div onClick={() => setActiveTab('requests')} className="bg-primary text-white rounded-3xl p-5 md:p-6 flex flex-col justify-center hover:-translate-y-1 active:scale-95 transition-all cursor-pointer shadow-lg shadow-primary/30 relative overflow-hidden md:col-span-2">
@@ -556,28 +559,63 @@ export const PartnerDashboardPage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <Wallet size={18} className="text-white/70" />
-                        <p className="text-xs md:text-sm text-white/70 font-bold uppercase tracking-wider">Available to Withdraw</p>
+                        <p className="text-xs md:text-sm text-white/70 font-bold uppercase tracking-wider">Available Wallet Balance</p>
                       </div>
-                      <h3 className="text-5xl md:text-6xl font-black mb-8 md:mb-10 tracking-tight">₹{formatCurrency((stats?.totalEarningsPaise || 0) - (stats?.pendingPayoutPaise || 0))}</h3>
+                      <h3 className="text-5xl md:text-6xl font-black mb-8 md:mb-10 tracking-tight">₹{formatCurrency(stats?.walletBalancePaise ?? stats?.pendingPayoutPaise ?? 0)}</h3>
                     </div>
                     
-                    <button disabled={user?.kycStatus !== 'VERIFIED' && !user?.roles?.includes('ADMIN')} className="w-full md:w-auto md:max-w-xs h-14 bg-white text-black font-black text-lg rounded-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:bg-white/50 shadow-lg">
-                      Withdraw to Bank
+                    <button 
+                      onClick={() => navigate('/wallet')}
+                      className="w-full md:w-auto md:max-w-xs h-14 bg-white text-black font-black text-lg rounded-2xl active:scale-95 transition-transform shadow-lg flex items-center justify-center gap-2"
+                    >
+                      View Wallet & Payout
                     </button>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-4 md:gap-6">
                   <div className="bg-surface border border-borderLight rounded-3xl p-6 shadow-sm flex-1 flex flex-col justify-center">
-                    <p className="text-[11px] md:text-xs text-muted font-bold uppercase tracking-wider mb-2">In Escrow</p>
-                    <p className="text-3xl md:text-4xl font-black text-amber-500 mb-1">₹{formatCurrency(stats?.pendingPayoutPaise || 0)}</p>
-                    <p className="text-[11px] md:text-xs text-muted font-medium leading-tight">Funds clear automatically after booking completion.</p>
+                    <p className="text-[11px] md:text-xs text-muted font-bold uppercase tracking-wider mb-2">Lifetime Earned</p>
+                    <p className="text-3xl md:text-4xl font-black text-textMain mb-1">₹{formatCurrency(stats?.totalEarningsPaise || 0)}</p>
+                    <p className="text-[11px] md:text-xs text-muted font-medium leading-tight">Total net revenue generated from bookings.</p>
                   </div>
                   <div className="bg-surface border border-borderLight rounded-3xl p-6 shadow-sm flex-1 flex flex-col justify-center">
-                    <p className="text-[11px] md:text-xs text-muted font-bold uppercase tracking-wider mb-2">Lifetime Earned</p>
-                    <p className="text-3xl md:text-4xl font-black text-textMain">₹{formatCurrency(stats?.totalEarningsPaise || 0)}</p>
+                    <p className="text-[11px] md:text-xs text-muted font-bold uppercase tracking-wider mb-2">Completed Meets</p>
+                    <p className="text-3xl md:text-4xl font-black text-success-text">{stats?.completedBookingsCount || 0}</p>
+                    <p className="text-[11px] md:text-xs text-muted font-medium leading-tight">Successfully verified companion dates.</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Recent Wallet Transactions */}
+              <div className="bg-surface border border-borderLight rounded-3xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-lg text-textMain">Recent Transactions</h3>
+                  <button onClick={() => navigate('/wallet')} className="text-primary text-sm font-bold hover:underline">
+                    Full Ledger →
+                  </button>
+                </div>
+
+                {ledger.length === 0 ? (
+                  <p className="text-sm text-muted py-4 text-center">No transactions yet. Complete bookings or receive date payments to see credits here.</p>
+                ) : (
+                  <div className="divide-y divide-borderLight">
+                    {ledger.map((item: any) => (
+                      <div key={item._id} className="py-3 flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-sm text-textMain">{item.reason}</p>
+                          <p className="text-xs text-muted">{new Date(item.createdAt).toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-sm ${['CREDIT', 'REFUND'].includes(item.type) ? 'text-success-text' : 'text-failed-text'}`}>
+                            {['CREDIT', 'REFUND'].includes(item.type) ? '+' : '-'}₹{(Math.abs(item.amountPaise) / 100).toFixed(2)}
+                          </p>
+                          <p className="text-[11px] text-muted">Bal: ₹{(item.balanceAfterPaise / 100).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

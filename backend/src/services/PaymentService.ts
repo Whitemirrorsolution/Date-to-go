@@ -223,6 +223,10 @@ export class PaymentService {
         body: `Payment for your booking at ${booking.venueName} has been received into escrow. Chat is now open!`,
         type: 'BOOKING_UPDATE',
       });
+
+      // Credit partner wallet immediately
+      const { walletService } = await import('./WalletService.js');
+      await walletService.creditPartnerForBooking(booking);
     }
   }
 

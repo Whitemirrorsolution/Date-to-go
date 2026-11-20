@@ -400,6 +400,9 @@ router.post(
       await booking.save();
       await Listing.findByIdAndUpdate(booking.listingId, { status: 'BOOKED' });
 
+      // Credit partner wallet immediately
+      await walletService.creditPartnerForBooking(booking);
+
       await Notification.create({
         userId: booking.partnerId as any,
         title: 'Payment Received! Date Confirmed 🎉',
@@ -424,6 +427,10 @@ router.post(
     );
 
     const booking = await Booking.findById(req.params.id);
+    if (booking) {
+      await walletService.creditPartnerForBooking(booking);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Payment verified and slot confirmed',
@@ -469,6 +476,9 @@ router.post(
     booking.otpAttempts = 0;
     await booking.save();
     await Listing.findByIdAndUpdate(booking.listingId, { status: 'BOOKED' });
+
+    // Credit partner wallet immediately
+    await walletService.creditPartnerForBooking(booking);
 
     await Notification.create({
       userId: booking.partnerId as any,
@@ -677,24 +687,8 @@ router.post(
     booking.set('completionOtpHash', undefined);
     await booking.save();
 
-    // Release escrow payout to partner wallet
-    await walletService.processTransaction(
-      booking.partnerId.toString(),
-      'CREDIT',
-      booking.partnerNetPaise,
-      `Escrow payment released for completed companion date #${booking._id.toString().slice(-6)}`,
-      'BOOKING',
-      booking._id.toString(),
-    );
-
-    // Notify Partner
-    await Notification.create({
-      userId: booking.partnerId as any,
-      title: 'Payment Released to Wallet! 💰',
-      body: `₹${(booking.partnerNetPaise / 100).toFixed(0)} credited to your wallet for booking #${booking._id.toString().slice(-6)}.`,
-      type: 'PAYMENT_CREDIT',
-      link: '/p/dashboard',
-    });
+    // Ensure partner wallet is credited (idempotent: safe if already credited on payment)
+    await walletService.creditPartnerForBooking(booking);
 
     // Notify Seeker
     await Notification.create({
@@ -760,24 +754,8 @@ router.post(
     booking.actualEndAt = new Date();
     await booking.save();
 
-    // Release escrow payout to partner
-    await walletService.processTransaction(
-      booking.partnerId.toString(),
-      'CREDIT',
-      booking.partnerNetPaise,
-      `Earnings for completed companion date #${booking._id.toString().slice(-6)}`,
-      'BOOKING',
-      booking._id.toString()
-    );
-
-    // Notify Partner
-    await Notification.create({
-      userId: booking.partnerId as any,
-      title: 'Earnings Credited! 💰',
-      body: `₹${(booking.partnerNetPaise / 100).toFixed(0)} credited to your wallet for booking #${booking._id.toString().slice(-6)}.`,
-      type: 'PAYMENT_CREDIT',
-      link: '/p/dashboard',
-    });
+    // Ensure partner wallet is credited (idempotent: safe if already credited on payment)
+    await walletService.creditPartnerForBooking(booking);
 
     // Notify Seeker
     await Notification.create({

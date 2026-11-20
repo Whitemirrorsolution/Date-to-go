@@ -632,16 +632,9 @@ router.post(
     booking.actualEndAt = new Date();
     await booking.save();
 
-    await walletService.processTransaction(
-      booking.partnerId.toString(),
-      'CREDIT',
-      booking.partnerNetPaise,
-      `Earnings for completed date #${booking._id.toString().slice(-6)}`,
-      'BOOKING',
-      booking._id.toString()
-    );
+    await walletService.creditPartnerForBooking(booking);
 
-    res.status(200).json({ success: true, message: 'Booking completed and escrow earnings released to wallet.', data: { stage: 'COMPLETED' } });
+    res.status(200).json({ success: true, message: 'Booking completed and earnings released to wallet.', data: { stage: 'COMPLETED' } });
   }),
 );
 
@@ -651,23 +644,32 @@ router.get(
   '/earnings',
   requireEntitlement('PARTNER'),
   asyncHandler(async (req: Request, res: Response) => {
-    const completedBookings = await Booking.find({
+    const paidBookings = await Booking.find({
       partnerId: req.user!.id,
-      stage: 'COMPLETED',
+      stage: { $in: ['PAID', 'IN_PROGRESS', 'AWAITING_OTP', 'COMPLETED'] },
     });
 
-    const totalEarningsPaise = completedBookings.reduce(
-      (sum, booking) => sum + booking.partnerNetPaise,
+    // Auto-backfill credit for any bookings that were paid
+    for (const booking of paidBookings) {
+      await walletService.creditPartnerForBooking(booking);
+    }
+
+    const totalEarningsPaise = paidBookings.reduce(
+      (sum, booking) => sum + (booking.partnerNetPaise || 0),
       0,
     );
+
+    const walletBalancePaise = await walletService.getBalance(req.user!.id);
 
     res.status(200).json({
       success: true,
       data: {
-        completedBookingsCount: completedBookings.length,
+        completedBookingsCount: paidBookings.filter(b => b.stage === 'COMPLETED').length,
+        activePaidBookingsCount: paidBookings.filter(b => b.stage !== 'COMPLETED').length,
         totalEarningsPaise,
         totalEarningsInRupees: `₹${(totalEarningsPaise / 100).toFixed(2)}`,
-        pendingPayoutPaise: await walletService.getBalance(req.user!.id),
+        walletBalancePaise,
+        pendingPayoutPaise: walletBalancePaise,
       },
     });
   }),

@@ -197,15 +197,20 @@ export const RegisterPage: React.FC = () => {
           <div>
             <label className="block text-primary font-medium mb-2 pl-2 text-sm">Mobile Number <span className="text-failed-text">*</span></label>
             <div className="relative flex items-center">
-              <span className="absolute left-5 font-bold text-textMain flex items-center gap-1">🇮🇳 +91</span>
+              <span className="absolute left-5 font-bold text-textMain flex items-center gap-1 select-none pointer-events-none">🇮🇳 +91</span>
               <input 
                 type="tel" 
                 inputMode="numeric"
                 maxLength={10}
                 placeholder="9876543210"
                 value={formData.mobile}
-                onChange={e => setFormData({...formData, mobile: e.target.value})}
-                className="w-full h-[56px] bg-[#FAFAFA] border-[1.5px] border-[#E5E5E5] rounded-[24px] pl-[85px] pr-5 text-base font-bold tracking-wide focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
+                onChange={e => {
+                  let digits = e.target.value.replace(/\D/g, '');
+                  if (digits.length >= 12 && digits.startsWith('91')) digits = digits.slice(2);
+                  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+                  setFormData({ ...formData, mobile: digits.slice(0, 10) });
+                }}
+                className="w-full h-[56px] bg-[#FAFAFA] border-[1.5px] border-[#E5E5E5] rounded-[24px] pl-[88px] pr-5 text-base font-bold tracking-wide focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
               />
             </div>
           </div>

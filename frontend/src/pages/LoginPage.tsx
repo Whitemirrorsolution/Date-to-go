@@ -183,15 +183,20 @@ export const LoginPage: React.FC = () => {
               <div>
                 <label className="block text-primary font-medium mb-2 pl-2 text-sm">Phone Number <span className="text-failed-text">*</span></label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-5 font-bold text-textMain">+91</span>
+                  <span className="absolute left-5 font-bold text-textMain select-none pointer-events-none">+91</span>
                   <input 
                     type="tel" 
                     inputMode="numeric"
                     maxLength={10}
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => {
+                      let digits = e.target.value.replace(/\D/g, '');
+                      if (digits.length >= 12 && digits.startsWith('91')) digits = digits.slice(2);
+                      else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+                      setIdentifier(digits.slice(0, 10));
+                    }}
                     placeholder="9876543210"
-                    className="w-full h-[56px] bg-[#FAFAFA] border-[1.5px] border-[#E5E5E5] rounded-[24px] pl-[52px] pr-5 text-base font-bold tracking-wide focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
+                    className="w-full h-[56px] bg-[#FAFAFA] border-[1.5px] border-[#E5E5E5] rounded-[24px] pl-[60px] pr-5 text-base font-bold tracking-wide focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   />
                 </div>
               </div>
