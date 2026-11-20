@@ -28,6 +28,7 @@ export interface IPayoutDetails {
   method: 'BANK_ACCOUNT' | 'UPI';
   accountName?: string;
   accountNumber?: string;
+  bankName?: string;
   ifsc?: string;
   upiId?: string;
   isVerified: boolean;
@@ -106,6 +107,7 @@ const PayoutDetailsSchema = new Schema<IPayoutDetails>(
     method: { type: String, enum: ['BANK_ACCOUNT', 'UPI'], required: true },
     accountName: { type: String },
     accountNumber: { type: String },
+    bankName: { type: String },
     ifsc: { type: String },
     upiId: { type: String },
     isVerified: { type: Boolean, default: false },

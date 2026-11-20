@@ -682,20 +682,53 @@ router.post(
   requireEntitlement('PARTNER'),
   requireVerifiedKyc,
   asyncHandler(async (req: Request, res: Response) => {
-    const { amountPaise, bankDetails } = z.object({
-      amountPaise: z.number().int().min(100000), // Min 1000 INR
+    const { amountPaise, method, bankDetails, saveAsDefault } = z.object({
+      amountPaise: z.number().int().min(10000, 'Minimum withdrawal amount is ₹100'),
+      method: z.enum(['BANK_ACCOUNT', 'UPI']).default('BANK_ACCOUNT'),
       bankDetails: z.object({
+        accountHolderName: z.string().optional(),
         accountNumber: z.string().optional(),
+        bankName: z.string().optional(),
         ifsc: z.string().optional(),
         upiId: z.string().optional(),
-      }).optional()
+      }),
+      saveAsDefault: z.boolean().optional(),
     }).parse(req.body);
+
+    if (method === 'UPI' && !bankDetails.upiId) {
+      throw new AppError('UPI ID is required for UPI payout', 400);
+    }
+    if (method === 'BANK_ACCOUNT') {
+      if (!bankDetails.accountNumber || !bankDetails.ifsc) {
+        throw new AppError('Account Number and IFSC Code are required for Bank Transfer', 400);
+      }
+    }
 
     const partnerId = req.user!.id;
     const balance = await walletService.getBalance(partnerId);
 
     if (balance < amountPaise) {
-      throw new AppError('Insufficient wallet balance for this payout request', 400);
+      throw new AppError(`Insufficient wallet balance. Available balance: ₹${(balance / 100).toFixed(2)}`, 400);
+    }
+
+    // Save as default payout settings if requested
+    if (saveAsDefault) {
+      await PartnerProfile.findOneAndUpdate(
+        { userId: partnerId },
+        {
+          $set: {
+            payoutDetails: {
+              method,
+              accountName: bankDetails.accountHolderName,
+              accountNumber: bankDetails.accountNumber,
+              bankName: bankDetails.bankName,
+              ifsc: bankDetails.ifsc ? bankDetails.ifsc.toUpperCase() : undefined,
+              upiId: bankDetails.upiId,
+              isVerified: true,
+            },
+          },
+        }
+      );
     }
 
     const session = await (await import('mongoose')).default.startSession();
@@ -711,8 +744,12 @@ router.post(
         payoutRequest = new PayoutRequest({
           partnerId,
           amountPaise,
+          method,
           status: 'PENDING',
-          bankDetails,
+          bankDetails: {
+            ...bankDetails,
+            ifsc: bankDetails.ifsc ? bankDetails.ifsc.toUpperCase() : undefined,
+          },
         });
 
         await payoutRequest.save({ session });
@@ -721,7 +758,7 @@ router.post(
           partnerId,
           'DEBIT',
           amountPaise,
-          'Payout request initiated',
+          `Withdrawal request #${payoutRequest._id.toString().slice(-6)} (${method === 'UPI' ? 'UPI' : 'Bank'})`,
           'PAYOUT',
           payoutRequest._id.toString(),
         );
@@ -730,9 +767,22 @@ router.post(
       await session.endSession();
     }
 
+    // Send confirmation notification
+    try {
+      const { Notification } = await import('../models/Notification.js');
+      await Notification.create({
+        userId: partnerId as any,
+        title: 'Withdrawal Request Submitted ⏳',
+        body: `Your request to withdraw ₹${(amountPaise / 100).toFixed(0)} via ${method === 'UPI' ? 'UPI' : 'Bank Transfer'} is under review.`,
+        type: 'PAYOUT_UPDATE',
+      });
+    } catch {
+      // Non-blocking notification
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Payout request submitted successfully.',
+      message: 'Withdrawal request submitted successfully.',
       data: payoutRequest,
     });
   }),
@@ -746,6 +796,55 @@ router.get(
     res.status(200).json({
       success: true,
       data: payouts,
+    });
+  }),
+);
+
+// ── GET /payout-settings ───────────────────────────────────────────────────
+router.get(
+  '/payout-settings',
+  requireEntitlement('PARTNER'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const profile = await PartnerProfile.findOne({ userId: req.user!.id }).select('payoutDetails');
+    res.status(200).json({
+      success: true,
+      data: profile?.payoutDetails || null,
+    });
+  }),
+);
+
+// ── PUT /payout-settings ───────────────────────────────────────────────────
+router.put(
+  '/payout-settings',
+  requireEntitlement('PARTNER'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const dto = z.object({
+      method: z.enum(['BANK_ACCOUNT', 'UPI']),
+      accountName: z.string().optional(),
+      accountNumber: z.string().optional(),
+      bankName: z.string().optional(),
+      ifsc: z.string().optional(),
+      upiId: z.string().optional(),
+    }).parse(req.body);
+
+    const updated = await PartnerProfile.findOneAndUpdate(
+      { userId: req.user!.id },
+      {
+        $set: {
+          payoutDetails: {
+            ...dto,
+            ifsc: dto.ifsc ? dto.ifsc.toUpperCase() : undefined,
+            isVerified: true,
+          },
+        },
+      },
+      { new: true }
+    ).select('payoutDetails');
+
+    res.status(200).json({
+      success: true,
+      message: 'Payout settings saved successfully.',
+      data: updated?.payoutDetails,
     });
   }),
 );

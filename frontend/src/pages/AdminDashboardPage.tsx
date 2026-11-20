@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api.js';
 import { 
   Users, UserCheck, CreditCard, Calendar, AlertTriangle, 
-  FileText, HelpCircle, Shield, ChevronRight, Activity, X, LogOut
+  FileText, HelpCircle, Shield, ChevronRight, Activity, X, LogOut,
+  CheckCircle2, Clock, ArrowDownRight, ArrowDownToLine, AlertCircle, Copy, Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { useNavigate } from 'react-router-dom';
@@ -61,6 +62,18 @@ export const AdminDashboardPage: React.FC = () => {
 
   const [availableCategories, setAvailableCategories] = useState<any[]>([]);
 
+  // Payout management states
+  const [payoutStats, setPayoutStats] = useState<any>(null);
+  const [payoutFilterStatus, setPayoutFilterStatus] = useState<string>('ALL');
+  const [selectedPayoutForAction, setSelectedPayoutForAction] = useState<any | null>(null);
+  const [payoutActionForm, setPayoutActionForm] = useState({
+    status: 'CONFIRMED',
+    utrNumber: '',
+    adminNote: '',
+  });
+  const [payoutActionLoading, setPayoutActionLoading] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
   const fetchData = async (tab: Tab) => {
     setLoading(true);
     setErrorMsg(null);
@@ -84,6 +97,10 @@ export const AdminDashboardPage: React.FC = () => {
         setData([resData.data || resData]); // Overview returns a single object
       } else if (resData) {
         setData(resData.data || resData || []);
+      }
+
+      if (tab === 'payouts' && resData.stats) {
+        setPayoutStats(resData.stats);
       }
 
       if (tab === 'packages') {
@@ -117,6 +134,63 @@ export const AdminDashboardPage: React.FC = () => {
       fetchData(activeTab);
     } catch (e: any) {
       alert(e.message || 'Action failed');
+    }
+  };
+
+  const handleOpenPayoutAction = (payout: any) => {
+    setSelectedPayoutForAction(payout);
+    setPayoutActionForm({
+      status: payout.status === 'PENDING' ? 'CONFIRMED' : payout.status,
+      utrNumber: payout.utrNumber || '',
+      adminNote: payout.adminNote || '',
+    });
+  };
+
+  const handleSavePayoutStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPayoutForAction) return;
+
+    if (payoutActionForm.status === 'REJECTED' && !payoutActionForm.adminNote.trim()) {
+      alert('Please provide a reason for rejecting the payout. This will be sent to the partner and their wallet will be refunded.');
+      return;
+    }
+
+    setPayoutActionLoading(true);
+    try {
+      await api.patch(`/admin/payouts/${selectedPayoutForAction._id}/status`, payoutActionForm);
+      setSelectedPayoutForAction(null);
+      fetchData('payouts');
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to update payout status');
+    } finally {
+      setPayoutActionLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const renderAdminPayoutBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">⏳ Pending Review</span>;
+      case 'PROCESSING':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">🚀 Processing</span>;
+      case 'CONFIRMED':
+      case 'PAID':
+      case 'APPROVED':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">✅ Credited</span>;
+      case 'REJECTED':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200">❌ Rejected (Refunded)</span>;
+      case 'ON_HOLD':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-800 border border-orange-200">⏸️ On Hold</span>;
+      case 'FROZEN':
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">❄️ Frozen</span>;
+      default:
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">{status}</span>;
     }
   };
 
@@ -320,6 +394,178 @@ export const AdminDashboardPage: React.FC = () => {
 
   const renderTable = () => {
     if (loading) return <div className="p-12 text-center text-muted">Loading data...</div>;
+
+    // Dedicated Payouts Section
+    if (activeTab === 'payouts') {
+      const filteredPayouts = data.filter((item: any) => {
+        if (payoutFilterStatus === 'ALL') return true;
+        if (payoutFilterStatus === 'CONFIRMED') return ['CONFIRMED', 'PAID', 'APPROVED'].includes(item.status);
+        return item.status === payoutFilterStatus;
+      });
+
+      return (
+        <div className="space-y-6">
+          {/* Summary Metric Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Pending Review</span>
+                <Clock size={16} className="text-amber-600" />
+              </div>
+              <p className="text-2xl font-black text-amber-900">{payoutStats?.pendingCount ?? 0}</p>
+              <p className="text-xs font-semibold text-amber-700 mt-0.5">₹{(((payoutStats?.pendingPaise || 0) / 100)).toFixed(0)} queued</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">Processing</span>
+                <ArrowDownRight size={16} className="text-blue-600" />
+              </div>
+              <p className="text-2xl font-black text-blue-900">{payoutStats?.processingCount ?? 0}</p>
+              <p className="text-xs font-semibold text-blue-700 mt-0.5">₹{(((payoutStats?.processingPaise || 0) / 100)).toFixed(0)} in transfer</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Settled / Credited</span>
+                <CheckCircle2 size={16} className="text-emerald-600" />
+              </div>
+              <p className="text-2xl font-black text-emerald-900">{payoutStats?.confirmedCount ?? 0}</p>
+              <p className="text-xs font-semibold text-emerald-700 mt-0.5">₹{(((payoutStats?.confirmedPaise || 0) / 100)).toFixed(0)} paid out</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Rejected / Refunded</span>
+                <AlertCircle size={16} className="text-rose-600" />
+              </div>
+              <p className="text-2xl font-black text-rose-900">{payoutStats?.rejectedCount ?? 0}</p>
+              <p className="text-xs font-semibold text-rose-700 mt-0.5">Auto-refunded to wallet</p>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+            {['ALL', 'PENDING', 'PROCESSING', 'CONFIRMED', 'ON_HOLD', 'FROZEN', 'REJECTED'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setPayoutFilterStatus(st)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  payoutFilterStatus === st
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-surface border border-borderLight text-muted hover:border-slate-300'
+                }`}
+              >
+                {st === 'ALL' ? 'All Requests' : st.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+
+          {/* Payouts Table */}
+          {filteredPayouts.length === 0 ? (
+            <div className="p-12 text-center text-muted bg-surface rounded-2xl border border-borderLight">
+              No payout records found for this status.
+            </div>
+          ) : (
+            <div className="overflow-x-auto bg-surface rounded-2xl border border-borderLight shadow-sm">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-borderLight text-xs text-muted uppercase tracking-wider bg-bg/50">
+                    <th className="p-4 font-bold">Partner Details</th>
+                    <th className="p-4 font-bold">Amount</th>
+                    <th className="p-4 font-bold">Destination (Bank/UPI)</th>
+                    <th className="p-4 font-bold">Requested Date</th>
+                    <th className="p-4 font-bold">Status</th>
+                    <th className="p-4 font-bold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-borderLight text-sm">
+                  {filteredPayouts.map((item: any) => {
+                    const partner = item.partnerId || {};
+                    return (
+                      <tr key={item._id} className="hover:bg-bg/40 transition-colors">
+                        <td className="p-4">
+                          <div className="font-bold text-textMain">{partner.displayName || partner.name || 'Partner'}</div>
+                          <div className="text-xs text-muted">{partner.email || partner.mobile || 'No contact'}</div>
+                          {partner.walletBalancePaise !== undefined && (
+                            <div className="text-[11px] text-primary font-semibold mt-0.5">
+                              Bal: ₹{(partner.walletBalancePaise / 100).toFixed(2)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <span className="font-black text-lg text-textMain">₹{(item.amountPaise / 100).toFixed(0)}</span>
+                        </td>
+                        <td className="p-4">
+                          {item.method === 'UPI' ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                                ⚡ UPI
+                              </span>
+                              <div className="font-mono text-xs text-textMain mt-1 font-semibold">{item.bankDetails?.upiId}</div>
+                              {item.bankDetails?.accountHolderName && (
+                                <div className="text-xs text-muted">{item.bankDetails.accountHolderName}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                🏦 Bank
+                              </span>
+                              <div className="text-xs text-textMain mt-1 font-semibold">
+                                A/C: {item.bankDetails?.accountNumber || 'N/A'}
+                              </div>
+                              <div className="text-xs text-muted">
+                                IFSC: <span className="font-mono">{item.bankDetails?.ifsc}</span>
+                                {item.bankDetails?.bankName ? ` (${item.bankDetails.bankName})` : ''}
+                              </div>
+                              {item.bankDetails?.accountHolderName && (
+                                <div className="text-xs text-muted">{item.bankDetails.accountHolderName}</div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 text-xs text-muted">
+                          <div>{new Date(item.createdAt).toLocaleDateString()}</div>
+                          <div className="text-[11px] text-muted/70">{new Date(item.createdAt).toLocaleTimeString()}</div>
+                          {item.creditedAt && (
+                            <div className="text-[11px] text-emerald-600 font-semibold mt-1">
+                              Credited: {new Date(item.creditedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {renderAdminPayoutBadge(item.status)}
+                          {item.utrNumber && (
+                            <div className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded mt-1 border border-emerald-200 truncate max-w-[150px]">
+                              UTR: {item.utrNumber}
+                            </div>
+                          )}
+                          {item.adminNote && (
+                            <div className="text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded mt-1 border border-slate-200 truncate max-w-[150px]">
+                              {item.adminNote}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleOpenPayoutAction(item)}
+                            className="btn-sm bg-primary text-white font-bold text-xs px-3.5 py-1.5 rounded-xl hover:opacity-95 shadow-sm active:scale-95 transition-all"
+                          >
+                            Manage Payout
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (data.length === 0) return <div className="p-12 text-center text-muted">No records found for this section.</div>;
 
     return (
@@ -404,13 +650,6 @@ export const AdminDashboardPage: React.FC = () => {
                     </>
                   )}
                   
-                  {/* Payouts */}
-                  {activeTab === 'payouts' && item.status === 'PENDING' && (
-                    <>
-                      <button onClick={() => handleAction(`/admin/payouts/${item._id}/approve`)} className="btn-sm bg-success-bg text-success-text">Approve</button>
-                      <button onClick={() => handleAction(`/admin/payouts/${item._id}/reject`, { adminNote: 'Rejected' })} className="btn-sm bg-failed-bg text-failed-text">Reject</button>
-                    </>
-                  )}
 
                   {/* Safety */}
                   {activeTab === 'safety' && item.status === 'ESCALATED' && (
@@ -983,6 +1222,206 @@ export const AdminDashboardPage: React.FC = () => {
                 </form>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Processing / Action Modal */}
+      {selectedPayoutForAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-surface rounded-2xl max-w-lg w-full border border-borderLight shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-borderLight flex justify-between items-center bg-bg/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <ArrowDownToLine size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-textMain">Manage Payout Request</h3>
+                  <p className="text-xs text-muted">ID: {selectedPayoutForAction._id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedPayoutForAction(null)}
+                className="p-1 rounded-lg text-muted hover:text-textMain hover:bg-bg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePayoutStatus} className="p-5 overflow-y-auto space-y-4">
+              {/* Partner & Amount Overview Card */}
+              <div className="p-4 rounded-xl bg-bg border border-borderLight flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted font-medium">Partner</p>
+                  <p className="font-bold text-textMain">{selectedPayoutForAction.partnerId?.fullName || 'Partner'}</p>
+                  <p className="text-xs text-muted">{selectedPayoutForAction.partnerId?.phone || selectedPayoutForAction.partnerId?.email || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted font-medium">Withdrawal Amount</p>
+                  <p className="text-2xl font-black text-emerald-600">₹{(selectedPayoutForAction.amountPaise / 100).toLocaleString('en-IN')}</p>
+                  <div className="mt-1">{renderAdminPayoutBadge(selectedPayoutForAction.status)}</div>
+                </div>
+              </div>
+
+              {/* Beneficiary Details with 1-Click Copy */}
+              <div className="p-4 rounded-xl bg-surface border border-borderLight/80 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-borderLight/60">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted">
+                    {selectedPayoutForAction.method === 'UPI' ? '⚡ UPI Beneficiary Details' : '🏦 Bank Transfer Details'}
+                  </span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-bg text-textMain border border-borderLight">
+                    {selectedPayoutForAction.method === 'UPI' ? 'UPI' : 'NEFT / IMPS'}
+                  </span>
+                </div>
+
+                {selectedPayoutForAction.method === 'UPI' ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted text-xs">Beneficiary Name</span>
+                      <span className="font-medium text-textMain">{selectedPayoutForAction.bankDetails?.accountHolderName || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm bg-bg p-2.5 rounded-lg border border-borderLight">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted block">UPI ID / VPA</span>
+                        <span className="font-mono font-bold text-sm text-textMain">{selectedPayoutForAction.bankDetails?.upiId || 'N/A'}</span>
+                      </div>
+                      {selectedPayoutForAction.bankDetails?.upiId && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedPayoutForAction.bankDetails.upiId, 'upi')}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 bg-surface hover:bg-borderLight text-primary font-semibold rounded border border-borderLight transition-colors"
+                        >
+                          {copiedField === 'upi' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                          {copiedField === 'upi' ? 'Copied' : 'Copy UPI'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted text-xs">Account Holder</span>
+                      <span className="font-medium text-textMain">{selectedPayoutForAction.bankDetails?.accountHolderName || 'N/A'}</span>
+                    </div>
+                    {selectedPayoutForAction.bankDetails?.bankName && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted text-xs">Bank Name</span>
+                        <span className="font-medium text-textMain">{selectedPayoutForAction.bankDetails.bankName}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-sm bg-bg p-2.5 rounded-lg border border-borderLight">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted block">Account Number</span>
+                        <span className="font-mono font-bold text-sm text-textMain">{selectedPayoutForAction.bankDetails?.accountNumber || 'N/A'}</span>
+                      </div>
+                      {selectedPayoutForAction.bankDetails?.accountNumber && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedPayoutForAction.bankDetails.accountNumber, 'acc')}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 bg-surface hover:bg-borderLight text-primary font-semibold rounded border border-borderLight transition-colors"
+                        >
+                          {copiedField === 'acc' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                          {copiedField === 'acc' ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center text-sm bg-bg p-2.5 rounded-lg border border-borderLight">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted block">IFSC Code</span>
+                        <span className="font-mono font-bold text-sm text-textMain">{selectedPayoutForAction.bankDetails?.ifsc || 'N/A'}</span>
+                      </div>
+                      {selectedPayoutForAction.bankDetails?.ifsc && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedPayoutForAction.bankDetails.ifsc, 'ifsc')}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 bg-surface hover:bg-borderLight text-primary font-semibold rounded border border-borderLight transition-colors"
+                        >
+                          {copiedField === 'ifsc' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                          {copiedField === 'ifsc' ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Selector */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-muted mb-1.5">Update Payout Status</label>
+                <select
+                  value={payoutActionForm.status}
+                  onChange={(e) => setPayoutActionForm({ ...payoutActionForm, status: e.target.value })}
+                  className="w-full p-2.5 rounded-xl bg-bg border border-borderLight text-sm font-semibold text-textMain focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="CONFIRMED">✅ Confirmed & Credited (Completed)</option>
+                  <option value="PROCESSING">🚀 In Process (Payment Initiated)</option>
+                  <option value="ON_HOLD">⏸️ On Hold (Compliance / Verification)</option>
+                  <option value="FROZEN">❄️ Frozen (Suspicious / Blocked)</option>
+                  <option value="REJECTED">❌ Rejected (Auto-Refund to Partner Wallet)</option>
+                  <option value="PENDING">⏳ Pending Review</option>
+                </select>
+              </div>
+
+              {/* Bank UTR / Reference */}
+              {(payoutActionForm.status === 'CONFIRMED' || payoutActionForm.status === 'PROCESSING') && (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-muted mb-1.5">
+                    Bank UTR / Reference Number {payoutActionForm.status === 'CONFIRMED' && <span className="text-emerald-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={payoutActionForm.utrNumber}
+                    onChange={(e) => setPayoutActionForm({ ...payoutActionForm, utrNumber: e.target.value })}
+                    placeholder="e.g. 412589632145 or UPI Transaction ID"
+                    className="w-full p-2.5 rounded-xl bg-bg border border-borderLight text-sm font-mono text-textMain focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <p className="text-[11px] text-muted mt-1">This reference number will be visible to the partner for tracking in their bank statement.</p>
+                </div>
+              )}
+
+              {/* Admin Note / Rejection Reason */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-muted mb-1.5">
+                  Admin Note / Remarks {payoutActionForm.status === 'REJECTED' && <span className="text-rose-500 font-bold">(Mandatory for Rejection)</span>}
+                </label>
+                <textarea
+                  rows={2}
+                  value={payoutActionForm.adminNote}
+                  onChange={(e) => setPayoutActionForm({ ...payoutActionForm, adminNote: e.target.value })}
+                  placeholder={payoutActionForm.status === 'REJECTED' ? 'Reason for rejection (e.g., Invalid IFSC code, KYC mismatch)' : 'Optional internal note or message to partner'}
+                  className="w-full p-2.5 rounded-xl bg-bg border border-borderLight text-sm text-textMain focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {payoutActionForm.status === 'REJECTED' && (
+                  <p className="text-[11px] text-rose-500 font-medium mt-1">
+                    ⚠️ When rejected, ₹{(selectedPayoutForAction.amountPaise / 100).toLocaleString('en-IN')} will be immediately refunded back to the partner's wallet.
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPayoutForAction(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-borderLight text-muted hover:bg-bg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={payoutActionLoading}
+                  className={`px-5 py-2 rounded-xl text-sm font-bold text-white shadow-md transition-all ${
+                    payoutActionForm.status === 'REJECTED'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : payoutActionForm.status === 'CONFIRMED'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-primary hover:bg-primaryHover'
+                  }`}
+                >
+                  {payoutActionLoading ? 'Saving...' : 'Update Payout Status'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

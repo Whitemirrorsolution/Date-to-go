@@ -6,7 +6,7 @@ import { useAccess } from '../../../shared/providers/AccessProvider.js';
 import { 
   Home, Inbox, List, Wallet, User, LogOut, ArrowLeftRight, 
   AlertCircle, ChevronRight, CheckCircle2, Calendar, IndianRupee, ShieldAlert, MapPin,
-  Sparkles, MessageSquare
+  Sparkles, MessageSquare, Building, ArrowDownRight, Clock
 } from 'lucide-react';
 import { StageChip } from '../../../components/StageChip.js';
 import { CreateListingSheet } from '../components/CreateListingSheet.js';
@@ -19,6 +19,7 @@ import { PartnerRequestInbox } from '../components/PartnerRequestInbox.js';
 import { PartnerOtpSheet } from '../components/PartnerOtpSheet.js';
 import { setAppBadge } from '../../../pwa/badging.js';
 import { walletApi } from '../../../services/wallet.js';
+import { WithdrawModal } from '../components/WithdrawModal.js';
 
 export type PartnerTabType = 'home' | 'requests' | 'listings' | 'wallet' | 'profile' | 'accepted' | 'rules' | 'templates';
 
@@ -51,6 +52,8 @@ export const PartnerDashboardPage: React.FC = () => {
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [activeOtpBookingId, setActiveOtpBookingId] = useState<string | null>(null);
   const [ledger, setLedger] = useState<any[]>([]);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [payoutsList, setPayoutsList] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -59,7 +62,7 @@ export const PartnerDashboardPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [profileRes, healthRes, statsRes, bookingsRes, catRes, listingsRes, ledgerRes] = await Promise.all([
+      const [profileRes, healthRes, statsRes, bookingsRes, catRes, listingsRes, ledgerRes, payoutsRes] = await Promise.all([
         api.get<any>('/partner/profile').catch(() => ({ data: null })),
         api.get<any>('/partner/profile/health').catch(() => ({ data: null })),
         api.get<any>('/partner/earnings').catch(() => ({ data: null })),
@@ -67,6 +70,7 @@ export const PartnerDashboardPage: React.FC = () => {
         api.get<any>('/categories').catch(() => ({ data: null })),
         api.get<any>('/partner/listings').catch(() => ({ data: null })),
         walletApi.getLedger(10).catch(() => ({ records: [], total: 0 })),
+        api.get<any>('/partner/payouts').catch(() => ({ data: [] })),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       if (healthRes.data) setHealth(healthRes.data);
@@ -76,6 +80,7 @@ export const PartnerDashboardPage: React.FC = () => {
       if (catRes.data) setCategoriesList(catRes.data);
       if (listingsRes.data) setListings(listingsRes.data);
       if (ledgerRes?.records) setLedger(ledgerRes.records);
+      if (payoutsRes.data) setPayoutsList(payoutsRes.data);
 
       console.log("booking data", bookingsRes)
       console.log("profile res", profileRes, healthRes, statsRes, catRes, listingsRes)
@@ -89,6 +94,55 @@ export const PartnerDashboardPage: React.FC = () => {
 
 
 
+
+  const renderPayoutBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+            <Clock size={12} /> Under Review
+          </span>
+        );
+      case 'PROCESSING':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <ArrowDownRight size={12} /> Processing
+          </span>
+        );
+      case 'CONFIRMED':
+      case 'PAID':
+      case 'APPROVED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <CheckCircle2 size={12} /> Credited
+          </span>
+        );
+      case 'REJECTED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-800 border border-red-200">
+            <AlertCircle size={12} /> Rejected (Refunded)
+          </span>
+        );
+      case 'ON_HOLD':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-800 border border-orange-200">
+            <AlertCircle size={12} /> On Hold
+          </span>
+        );
+      case 'FROZEN':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+            <ShieldAlert size={12} /> Frozen
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+            {status}
+          </span>
+        );
+    }
+  };
 
   // --- Memos to prevent recalculation on every render ---
   const activeBookings = useMemo(() => 
@@ -564,12 +618,20 @@ export const PartnerDashboardPage: React.FC = () => {
                       <h3 className="text-5xl md:text-6xl font-black mb-8 md:mb-10 tracking-tight">₹{formatCurrency(stats?.walletBalancePaise ?? stats?.pendingPayoutPaise ?? 0)}</h3>
                     </div>
                     
-                    <button 
-                      onClick={() => navigate('/wallet')}
-                      className="w-full md:w-auto md:max-w-xs h-14 bg-white text-black font-black text-lg rounded-2xl active:scale-95 transition-transform shadow-lg flex items-center justify-center gap-2"
-                    >
-                      View Wallet & Payout
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button 
+                        onClick={() => setShowWithdrawModal(true)}
+                        className="w-full sm:w-auto px-6 h-14 bg-white text-black font-black text-base rounded-2xl active:scale-95 transition-transform shadow-lg flex items-center justify-center gap-2"
+                      >
+                        <IndianRupee size={18} /> Withdraw to Bank / UPI
+                      </button>
+                      <button 
+                        onClick={() => setShowWithdrawModal(true)}
+                        className="w-full sm:w-auto px-5 h-14 bg-white/10 hover:bg-white/20 text-white font-bold text-sm rounded-2xl active:scale-95 transition-transform flex items-center justify-center gap-2 backdrop-blur-sm"
+                      >
+                        Payout Settings
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -617,6 +679,63 @@ export const PartnerDashboardPage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Withdrawal Requests & Payout Status */}
+              <div className="bg-surface border border-borderLight rounded-3xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2">
+                    <Building size={20} className="text-primary" />
+                    <h3 className="font-bold text-lg text-textMain">Withdrawal Requests</h3>
+                  </div>
+                  <button onClick={() => setShowWithdrawModal(true)} className="px-3.5 py-1.5 rounded-xl bg-primary text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-transform">
+                    + New Withdrawal
+                  </button>
+                </div>
+
+                {payoutsList.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted">No withdrawal requests yet.</p>
+                    <p className="text-xs text-muted/70 mt-1">Tap "Withdraw to Bank / UPI" above to transfer your wallet earnings.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-borderLight">
+                    {payoutsList.map((payout: any) => (
+                      <div key={payout._id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-black text-xl text-textMain">₹{(payout.amountPaise / 100).toFixed(0)}</span>
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-lg font-bold bg-bg border border-borderLight text-slate-700">
+                              {payout.method === 'UPI' ? '⚡ Instant UPI' : '🏦 Bank Transfer'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted font-medium mt-1">
+                            {payout.method === 'UPI' 
+                              ? `UPI ID: ${payout.bankDetails?.upiId}` 
+                              : `A/C: ••••${payout.bankDetails?.accountNumber?.slice(-4) || ''} | IFSC: ${payout.bankDetails?.ifsc || ''}${payout.bankDetails?.bankName ? ` (${payout.bankDetails.bankName})` : ''}`}
+                          </p>
+                          <p className="text-[11px] text-muted mt-0.5">Requested: {new Date(payout.createdAt).toLocaleString()}</p>
+                          {payout.utrNumber && (
+                            <div className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg">
+                              <span>UTR / Ref No:</span>
+                              <span className="font-mono tracking-wide">{payout.utrNumber}</span>
+                            </div>
+                          )}
+                          {payout.adminNote && (
+                            <p className="text-xs font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg mt-1.5 inline-block">
+                              Note: {payout.adminNote}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Status Chip */}
+                        <div className="self-start md:self-center">
+                          {renderPayoutBadge(payout.status)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -653,7 +772,7 @@ export const PartnerDashboardPage: React.FC = () => {
                   { icon: User, label: 'Edit Profile Wizard', action: () => navigate('/p/onboarding') },
                   { icon: ShieldAlert, label: 'KYC Documents', action: () => navigate('/p/kyc') },
                   { icon: CheckCircle2, label: 'View Public Profile', action: () => navigate('/p/profile') },
-                  { icon: IndianRupee, label: 'Payout Settings (Bank/UPI)', action: () => {} },
+                  { icon: IndianRupee, label: 'Payout Settings (Bank/UPI)', action: () => setShowWithdrawModal(true) },
                 ].map((item, idx, arr) => (
                   <button 
                     key={item.label}
@@ -686,6 +805,13 @@ export const PartnerDashboardPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          <WithdrawModal
+            isOpen={showWithdrawModal}
+            onClose={() => setShowWithdrawModal(false)}
+            walletBalancePaise={stats?.walletBalancePaise ?? stats?.pendingPayoutPaise ?? 0}
+            onSuccess={fetchData}
+          />
         </main>
 
         {/* Mobile Sticky Bottom Navigation (Hidden on Desktop) */}

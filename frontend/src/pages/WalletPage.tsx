@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, History, Clock } from 'lucide-react';
+import { ChevronLeft, Plus, History, Clock, ArrowDownRight } from 'lucide-react';
 import { walletApi, type WalletLedgerEntry } from '../services/wallet.js';
+import { WithdrawModal } from '../roles/partner/components/WithdrawModal.js';
 
 export const WalletPage: React.FC = () => {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ export const WalletPage: React.FC = () => {
   const [balancePaise, setBalancePaise] = useState(0);
   const [ledger, setLedger] = useState<WalletLedgerEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   const fetchWallet = async () => {
     try {
@@ -48,6 +50,13 @@ export const WalletPage: React.FC = () => {
             >
               <Plus size={20} />
               Add Money
+            </button>
+            <button 
+              onClick={() => setShowWithdrawModal(true)}
+              className="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2 border border-white/30 backdrop-blur-sm"
+            >
+              <ArrowDownRight size={20} />
+              Withdraw
             </button>
           </div>
         </section>
@@ -91,6 +100,13 @@ export const WalletPage: React.FC = () => {
           </div>
         </section>
       </main>
+
+      <WithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        walletBalancePaise={balancePaise}
+        onSuccess={fetchWallet}
+      />
     </div>
   );
 };
